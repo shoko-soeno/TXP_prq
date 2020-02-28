@@ -47,10 +47,30 @@
 //Import history data
 	import delimited "/Users/shokosoeno/Downloads/tables_201804_201909/EHR_MEDICAL_HISTORY_CCI.csv", encoding(utf8) varnames(1) clear
 	//caliculate cci
+	tab cci1_mi
+	tab cci2_chd
+	tab cci3_pvd
+	tab cci4_cvd
+	tab cci5_dementia
+	tab cci6_pulmo
+	tab cci7_rheu
+	tab cci8_ulcer
+	tab cci9_mild_liver
+	tab cci10_dm_no_comp
+	tab cci11_dm_comp*2
+	tab cci12_plegia*2
+	tab cci13_rd*2
+	tab cci14_malig*2
+    tab cci15_mod_sev_liver*3
+	tab cci16_meta*6
+	tab cci17_aids*6
 	bysort encounter_id : gen cci_each = cci1_mi + cci2_chd + cci3_pvd + cci4_cvd + cci5_dementia + cci6_pulmo + cci7_rheu + cci8_ulcer + cci9_mild_liver + cci10_dm_no_comp + cci11_dm_comp*2 + cci12_plegia*2 + cci13_rd*2 + cci14_malig*2 + cci15_mod_sev_liver*3 + cci16_meta*6 + cci17_aids*6
 	keep encounter_id cci_each
-	bysort encounter_id : egen cci = sum(cci_each)
-	//duplicates drop encounter_id, force
+	tab cci_each
+	//bysort encounter_id : egen cci = sum(cci_each)
+	gsort + encounter_id - cci_each
+	duplicates drop encounter_id, force
+	tab cci_each
 	//collapse (sum) cci = cci_each, by(encounter_id)
 	save "/Users/shokosoeno/Downloads/TXP_prq/cci.dta", replace
 

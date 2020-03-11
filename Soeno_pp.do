@@ -1,43 +1,35 @@
 //Import vital sign data
 	clear
 	import delimited "/Users/shokosoeno/Downloads/tables_201804_201909/EHR_VITAL_NUMERIC.csv", encoding(utf8) clear
-	
-		/*We need to check outlier in vital signs*/
-
+	sort encounter_id vs_date vs_time
+		bysort encounter_id: gen n_by_id=_n
+		keep if n_by_id==1
+		
 	save "/Users/shokosoeno/Downloads/TXP_pp/vital.dta", replace
 
 //Import DPC data
-	import excel "/Users/shokosoeno/Desktop/TXP_vital_20200106/20191231_ERresearch_adpc_original.xlsx", sheet("Sheet1") firstrow clear
-		rename EncounterID encounter_id
+	//import excel "/Users/shokosoeno/Desktop/TXP_vital_20200106/20191231_ERresearch_adpc_original.xlsx", sheet("Sheet1") firstrow clear
+		//rename EncounterID encounter_id
 
-	save "/Users/shokosoeno/Downloads/TXP_pp/dpc.dta", replace
+	//save "/Users/shokosoeno/Downloads/TXP_pp/dpc.dta", replace
 
 //Import complaint
 	import delimited "/Users/shokosoeno/Downloads/tables_201804_201909/EHR_COMPLAINT.csv",  encoding(utf8) varnames(1) clear
 		
 		///Use only the primary CC
-		bysort encounter_id: gen n_by_id=_n
-		keep if n_by_id==1
-		///Sort by the frequency of CC
-		bysort standardcc: gen n_by_cc=_N
-		sort n_by_cc
+		sort encounter_id item_id
+		drop if encounter_id == ""
+		reshape wide standardcc, i(encounter_id) j(item_id) 		 
 		
-		rename standardcc cc
-
-	save "/Users/shokosoeno/Downloads/TXP_pp/complaint.dta", replace
+	save "/Users/shokosoeno/Downloads/TXP_pp/complaint.dta", replace	
 
 //Import diagnosis
 	import delimited "/Users/shokosoeno/Downloads/tables_201804_201909/EHR_DIAGNOSIS.csv", encoding(utf8) varnames(1) clear
 		
 		///Use only the primary CC
-		bysort encounter_id: gen n_by_id=_n
-		keep if n_by_id==1
-		///Sort by the frequency of CC
-		bysort icd10_1: gen n_by_cc=_N
-		sort n_by_cc
+		sort encounter_id item_id
+		keep if item_id==1
 		
-		rename icd10_1 diagnosis
-
 	save "/Users/shokosoeno/Downloads/TXP_pp/diagnosis.dta", replace
 
 //Import encounter data
@@ -45,52 +37,87 @@
 	save "/Users/shokosoeno/Downloads/TXP_pp/enc.dta", replace
 	
 //Import history data
-	import delimited "/Users/shokosoeno/Downloads/tables_201804_201909/EHR_MEDICAL_HISTORY_CCI.csv", encoding(utf8) varnames(1) clear
+	//import delimited "/Users/shokosoeno/Downloads/tables_201804_201909/EHR_MEDICAL_HISTORY_CCI.csv", encoding(utf8) varnames(1) clear
 	//caliculate cci
-	bysort encounter_id : gen cci_each = cci1_mi + cci2_chd + cci3_pvd + cci4_cvd + cci5_dementia + cci6_pulmo + cci7_rheu + cci8_ulcer + cci9_mild_liver + cci10_dm_no_comp + cci11_dm_comp*2 + cci12_plegia*2 + cci13_rd*2 + cci14_malig*2 + cci15_mod_sev_liver*3 + cci16_meta*6 + cci17_aids*6
-	keep encounter_id cci_each
-	tab cci_each
+	//bysort encounter_id : gen cci_each = cci1_mi + cci2_chd + cci3_pvd + cci4_cvd + cci5_dementia + cci6_pulmo + cci7_rheu + cci8_ulcer + cci9_mild_liver + cci10_dm_no_comp + cci11_dm_comp*2 + cci12_plegia*2 + cci13_rd*2 + cci14_malig*2 + cci15_mod_sev_liver*3 + cci16_meta*6 + cci17_aids*6
+	//keep encounter_id cci_each
+	//tab cci_each
 	//bysort encounter_id : egen cci = sum(cci_each)
-	gsort + encounter_id - cci_each
-	duplicates drop encounter_id, force
-	tab cci_each
+	//gsort + encounter_id - cci_each
+	//duplicates drop encounter_id, force
+	//tab cci_each
 	//collapse (sum) cci = cci_each, by(encounter_id)
-	save "/Users/shokosoeno/Downloads/TXP_pp/cci.dta", replace
-	
-//merge vital data and dpc data
-	use "/Users/shokosoeno/Downloads/TXP_prq/vital.dta", clear
-		merge 1:1 encounter_id using "/Users/shokosoeno/Downloads/TXP_prq/enc.dta"
-			drop _merge
-		merge 1:1 encounter_id using "/Users/shokosoeno/Downloads/TXP_prq/dpc.dta"
-			drop _merge
-		merge 1:1 encounter_id using "/Users/shokosoeno/Downloads/TXP_prq/complaint.dta"
-			drop _merge
-		merge 1:1 encounter_id using "/Users/shokosoeno/Downloads/TXP_prq/diagnosis.dta"
-			drop _merge
-		merge 1:1 encounter_id using "/Users/shokosoeno/Downloads/TXP_prq/cci.dta"
+	//save "/Users/shokosoeno/Downloads/TXP_pp/cci.dta", replace
 
-	save "/Users/shokosoeno/Downloads/TXP_pp/merged.dta", replace
+//Import procedure data	
+	import delimited "/Users/shokosoeno/Downloads/tables_201804_201909/CLAIM_PROCEDURE.csv", encoding(UTF-8)clear
+
+	gen mv_ref=0
+		replace mv_ref=1 if procedure_code=="J044" | procedure_code=="J045" 
+		
+		bysort encounter_id: egen mv=sum(mv_ref)
+		bysort encounter_id: gen n_by_id=_n
+		keep if n_by_id==1
+		replace mv=1 if mv>=1 & mv<.
+		keep encounter_id mv
+	save "/Users/shokosoeno/Downloads/TXP_pp/mv.dta", replace
+
+//merge vital data and dpc data
+	use "/Users/shokosoeno/Downloads/TXP_pp/vital.dta", clear
+		merge 1:1 encounter_id using "/Users/shokosoeno/Downloads/TXP_pp/enc.dta"
+			drop _merge
+		merge 1:1 encounter_id using "/Users/shokosoeno/Downloads/TXP_pp/complaint.dta"
+			drop _merge
+		merge 1:1 encounter_id using "/Users/shokosoeno/Downloads/TXP_pp/diagnosis.dta"
+			drop _merge
+		merge 1:1 encounter_id using "/Users/shokosoeno/Downloads/TXP_pp/mv.dta"
+
+		save "/Users/shokosoeno/Downloads/TXP_pp/merged.dta", replace
 	
 ///Data cleaning
 	use "/Users/shokosoeno/Downloads/TXP_pp/merged.dta", clear
 	
-		//Drop children and missing age
-		drop if age==.
-		drop if age<18
-		
-		///Drop missing data on respiratory rate
-		drop if pr==. | rr==. | spo2==.
+		//Age category
+		gen agecat=1 if age>=18 & age<40
+		replace agecat=2 if age>=40 & age<65
+		replace agecat=3 if age>=65 & age<85
+		replace agecat=4 if age>=85 & age<.
 
-		///Drop CPA
-		drop if cpa_flag==1 | pr==0 | rr==0 | spo2==0
+		//Top 10 CC category 
+		//tab CC, sort
+		gen CC_1_fever=0
+		replace CC_1_fever=1 if standardcc1=="発熱" //発熱
+		gen CC_2_shortbr=0
+		replace CC_2_shortbr=1 if standardcc1=="呼吸困難" //呼吸困難
+		gen CC_3_mental=0
+		replace CC_3_mental=1 if standardcc1=="意識障害" //意識障害
+		gen CC_4_chestp=0
+		replace CC_4_chestp=1 if standardcc1=="胸痛" //胸痛 
+		gen CC_5_abdp=0
+		replace CC_5_abdp=1 if standardcc1=="腹痛" | standardcc1=="臍下部痛" | standardcc1=="心窩部痛" | standardcc1=="右上腹部痛" | standardcc1=="右下腹部痛" 
+		gen CC_6_ha=0
+		replace CC_6_ha=1 if standardcc1=="頭痛" 
+		gen CC_7_nausea=0
+		replace CC_7_nausea=1 if standardcc1=="嘔吐・嘔気"
+
+		replace  mv=0 if mv==.
 		
-		//Drop outliers
-		drop if pr<10 | pr>300
-		drop if rr<3 | rr>60
-		drop if spo2<10 | spo2>100
-		drop if sbp < 0 | sbp > 300
-		//drop if dbp < 0 | dbp > 300
-		drop if sbp < dbp
+		gen hosp=0 
+		replace hosp=1 if disposition=="入院" | disposition=="ICU" | disposition=="直接入院" 
+		
+		//gen death=0
+		//replace death=1 if disposition=="死亡"　// tenki=="死亡"
+	
+		save "/Users/shokosoeno/Downloads/TXP_pp/analysis.dta", replace
+
+		////////////////////////////
+
+
+		
+		
+
+
+		replace  mv=0 if mv==.
 
 		//drop if the dprimary diagoniss is I46 or S00-U99 ...0 observations deleted
 		//drop if diagnosis = "I46"
@@ -98,35 +125,10 @@
 		//drop if dia_new == "S" |  dia_new == "T" | dia_new == "U"
 		
 		//Generalte PP index = PP/(1/2 * SBP)
-		gen pp = sbp-dbp
+		//gen pp = sbp-dbp
 		tab pp
-		gen pp_index = pp/(1/2 * sbp)
+		gen pp_index = pp/(0.5 * sbp)
 		tab pp_index
-		
-		//Age category
-		gen agecat=1 if age>=18 & age<40
-		replace agecat=2 if age>=40 & age<65
-		replace agecat=3 if age>=65 & age<85
-		replace agecat=4 if age>=85 & age<.
-		
-		//Top 10 CC category 
-		//tab CC, sort
-		gen CC_1_fever=0
-		replace CC_1_fever=1 if cc_code=="cc80" //発熱
-		gen CC_2_shortbr=0
-		replace CC_2_shortbr=1 if cc_code=="cc38" //呼吸困難
-		gen CC_3_mental=0
-		replace CC_3_mental=1 if cc_code=="cc58" //意識障害
-		gen CC_4_chestp=0
-		replace CC_4_chestp=1 if cc_code=="cc89" //胸痛 
-		gen CC_5_abdp=0
-		replace CC_5_abdp=1 if cc_code=="cc94" | cc_code=="cc96" | cc_code=="cc54" | cc_code=="cc35" | cc_code=="cc36" 
-			//腹痛: 臍下部痛はcc96, 心窩部痛はcc54, 右上腹部痛はcc35, 右下腹部痛はcc36
-		
-		//Route 分類について後藤先生に再確認
-		//replace route = 1
-		//replace route=2 if Route=="ems" | Route=="ems_dr" | Route=="ems_heli" | Route=="DRカー" 
-		//replace route=3 if Route=="walkin_direct" | Route=="walkin_follow" | Route=="others" | Route=="rrs"
 		
 		//Disposition
 		gen hosp=0 
@@ -136,25 +138,36 @@
 		replace icu=1 if disposition=="ICU" 
 		
 		gen death=0
-		replace death=1 if tenki=="死亡" | disposition=="死亡"
+		replace death=1 if disposition=="死亡"
+
+
 	
 	save "/Users/shokosoeno/Downloads/TXP_pp/analysis.dta", replace
 	
 ///Data analysis
 	use "/Users/shokosoeno/Downloads/TXP_pp/analysis.dta", clear
-	
-	//Characteristics of ED visits
-	//Use Table 1 command (findit table1)
-	
+
+	///Drop CPA
+	drop if cpa_flag==1 | pr==0 | rr==0 | spo2==0 | dbp==0 | sbp==0
+
+	//Drop children and missing age
+	drop if age<18
+	drop if age==.
+
 	//Change outliers to missing
 	replace sbp=. if sbp<20 | sbp>300
 	replace dbp=. if dbp<20 | dbp>300
 	replace bt=. if bt<20 | bt>45
-	
+
+	//Drop outliers
+	//drop if sbp < dbp
+
+	//Characteristics of ED visits
 	//Output table1
 	table1, vars(age contn \ sex cat \ sbp contn \ dbp contn \ pr contn \ /*
-	*/ rr contn \ spo2 contn \ bt contn \ jtas cat \ route cat \ cci cat \/*
-	*/ hosp cat \ icu cat \ death cat \ staylength conts \ pp_index contn) format(%9.0f) sav (/Users/shokosoeno/Downloads/TXP_pp/table1) 
+	*/ rr contn \ spo2 contn \ bt contn \ jtas cat \ route cat \ /*
+	*/ hosp cat \ icu cat \ death cat \ pp_index contn) format(%9.0f) sav (/Users/shokosoeno/Downloads/TXP_pp/table1) 
+	//staylength conts \ cci cat \
 	
 	//pp_indexの分布
 	hist pp_index

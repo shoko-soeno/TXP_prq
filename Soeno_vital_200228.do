@@ -1,48 +1,42 @@
 //Import vital sign data
 	clear
-	import delimited "/Users/shokosoeno/Downloads/tidy_tables/ERresearch_EHR_VITAL_NUMERIC.csv", encoding(utf8) clear
-	
-		/*We need to check outlier in vital signs*/
-
-	save "/Users/shokosoeno/Downloads/TXP_prq/vital.dta", replace
+	import delimited "/Users/shokosoeno/Downloads/tables_201804_201909/EHR_VITAL_NUMERIC.csv", encoding(utf8) clear
+	sort encounter_id vs_date vs_time
+		bysort encounter_id: gen n_by_id=_n
+		keep if n_by_id==1
+		
+	save "/Users/shokosoeno/Desktop/TXP/prq/vital.dta", replace
 
 //Import DPC data
 	import excel "/Users/shokosoeno/Desktop/TXP_vital_20200106/20191231_ERresearch_adpc_original.xlsx", sheet("Sheet1") firstrow clear
 		rename EncounterID encounter_id
 
-	save "/Users/shokosoeno/Downloads/TXP_prq/dpc.dta", replace
+	save "/Users/shokosoeno/Desktop/TXP/prq/dpc.dta", replace
 
 //Import complaint
-	import delimited "/Users/shokosoeno/Downloads/tidy_tables/ERresearch_EHR_COMPLAINT.csv",  encoding(utf8) varnames(1) clear
+	import delimited "/Users/shokosoeno/Downloads/tables_201804_201909/EHR_COMPLAINT.csv",  encoding(utf8) varnames(1) clear
 		
 		///Use only the primary CC
-		bysort encounter_id: gen n_by_id=_n
-		keep if n_by_id==1
-		///Sort by the frequency of CC
-		bysort standardcc: gen n_by_cc=_N
-		sort n_by_cc
+		sort encounter_id item_id
+		drop if encounter_id == ""
+		reshape wide standardcc, i(encounter_id) j(item_id) 		 
 		
-		rename standardcc cc
-
-	save "/Users/shokosoeno/Downloads/TXP_prq/complaint.dta", replace
+	save "/Users/shokosoeno/Desktop/TXP/prq/complaint.dta", replace
 
 //Import diagnosis
-	import delimited "/Users/shokosoeno/Downloads/tidy_tables/ERresearch_EHR_DIAGNOSIS.csv", encoding(utf8) varnames(1) clear
+	import delimited "/Users/shokosoeno/Downloads/tables_201804_201909/EHR_DIAGNOSIS.csv", encoding(utf8) varnames(1) clear
 		
 		///Use only the primary CC
-		bysort encounter_id: gen n_by_id=_n
-		keep if n_by_id==1
-		///Sort by the frequency of CC
-		bysort icd10_1: gen n_by_cc=_N
-		sort n_by_cc
-		
-		rename icd10_1 diagnosis
+		sort encounter_id item_id
+		keep if item_id==1
 
-	save "/Users/shokosoeno/Downloads/TXP_prq/diagnosis.dta", replace
+		rename icd10 diagnosis
+		
+	save "/Users/shokosoeno/Desktop/TXP/prq/diagnosis.dta", replace
 
 //Import encounter data
-	import delimited "/Users/shokosoeno/Downloads/tidy_tables/ERresearch_EHR_ENCOUNTER.csv", encoding(utf8) varnames(1) clear
-	save "/Users/shokosoeno/Downloads/TXP_prq/enc.dta", replace
+	import delimited "/Users/shokosoeno/Downloads/tables_201804_201909/EHR_ENCOUNTER.csv", encoding(utf8) varnames(1) clear
+	save "/Users/shokosoeno/Desktop/TXP/prq/enc.dta", replace
 	
 //Import history data
 	import delimited "/Users/shokosoeno/Downloads/tables_201804_201909/EHR_MEDICAL_HISTORY_CCI.csv", encoding(utf8) varnames(1) clear
@@ -55,24 +49,38 @@
 	duplicates drop encounter_id, force
 	tab cci_each
 	//collapse (sum) cci = cci_each, by(encounter_id)
-	save "/Users/shokosoeno/Downloads/TXP_prq/cci.dta", replace
+	save "/Users/shokosoeno/Desktop/TXP/prq/cci.dta", replace
 	
-//merge vital data and dpc data
-	use "/Users/shokosoeno/Downloads/TXP_prq/vital.dta", clear
-		merge 1:1 encounter_id using "/Users/shokosoeno/Downloads/TXP_prq/enc.dta"
-			drop _merge
-		merge 1:1 encounter_id using "/Users/shokosoeno/Downloads/TXP_prq/dpc.dta"
-			drop _merge
-		merge 1:1 encounter_id using "/Users/shokosoeno/Downloads/TXP_prq/complaint.dta"
-			drop _merge
-		merge 1:1 encounter_id using "/Users/shokosoeno/Downloads/TXP_prq/diagnosis.dta"
-			drop _merge
-		merge 1:1 encounter_id using "/Users/shokosoeno/Downloads/TXP_prq/cci.dta"
+//import procedure
+	import delimited "/Users/shokosoeno/Downloads/tables_201804_201909/CLAIM_PROCEDURE.csv", encoding(UTF-8)clear
+	gen mv_ref=0
+		replace mv_ref=1 if procedure_code=="J044" | procedure_code=="J045" 
+		
+		bysort encounter_id: egen mv=sum(mv_ref)
+		bysort encounter_id: gen n_by_id=_n
+		keep if n_by_id==1
+		replace mv=1 if mv>=1 & mv<.
+		keep encounter_id mv
+	save "/Users/shokosoeno/Desktop/TXP/prq/mv.dta", replace
 
-	save "/Users/shokosoeno/Downloads/TXP_prq/merged.dta", replace
+//merge vital data and dpc data
+	use "/Users/shokosoeno/Desktop/TXP/prq/vital.dta", clear
+		merge 1:1 encounter_id using "/Users/shokosoeno/Desktop/TXP/prq/enc.dta"
+			drop _merge
+		merge 1:1 encounter_id using "/Users/shokosoeno/Desktop/TXP/prq/dpc.dta"
+			drop _merge
+		merge 1:1 encounter_id using "/Users/shokosoeno/Desktop/TXP/prq/complaint.dta"
+			drop _merge
+		merge 1:1 encounter_id using "/Users/shokosoeno/Desktop/TXP/prq/diagnosis.dta"
+			drop _merge
+		merge 1:1 encounter_id using "/Users/shokosoeno/Desktop/TXP/prq/cci.dta"
+			drop _merge
+		merge 1:1 encounter_id using "/Users/shokosoeno/Desktop/TXP/prq/mv.dta"
+
+	save "/Users/shokosoeno/Desktop/TXP/prq/merged.dta", replace
 	
 ///Data cleaning
-	use "/Users/shokosoeno/Downloads/TXP_prq/merged.dta", clear
+	use "/Users/shokosoeno/Desktop/TXP/prq/merged.dta", clear
 	
 		//Drop children and missing age
 		drop if age==.
@@ -108,40 +116,36 @@
 		replace agecat=2 if age>=40 & age<65
 		replace agecat=3 if age>=65 & age<85
 		replace agecat=4 if age>=85 & age<.
-		
-		//Top 10 CC category 
-		//tab CC, sort
+
 		gen CC_1_fever=0
-		replace CC_1_fever=1 if cc_code=="cc80" //発熱
+		replace CC_1_fever=1 if standardcc1=="発熱" //発熱
 		gen CC_2_shortbr=0
-		replace CC_2_shortbr=1 if cc_code=="cc38" //呼吸困難
+		replace CC_2_shortbr=1 if standardcc1=="呼吸困難" //呼吸困難
 		gen CC_3_mental=0
-		replace CC_3_mental=1 if cc_code=="cc58" //意識障害
+		replace CC_3_mental=1 if standardcc1=="意識障害" //意識障害
 		gen CC_4_chestp=0
-		replace CC_4_chestp=1 if cc_code=="cc89" //胸痛 
+		replace CC_4_chestp=1 if standardcc1=="胸痛" //胸痛 
 		gen CC_5_abdp=0
-		replace CC_5_abdp=1 if cc_code=="cc94" | cc_code=="cc96" | cc_code=="cc54" | cc_code=="cc35" | cc_code=="cc36" 
-			//腹痛: 臍下部痛はcc96, 心窩部痛はcc54, 右上腹部痛はcc35, 右下腹部痛はcc36
-		
-		//Route 分類について後藤先生に再確認
-		//replace route = 1
-		//replace route=2 if Route=="ems" | Route=="ems_dr" | Route=="ems_heli" | Route=="DRカー" 
-		//replace route=3 if Route=="walkin_direct" | Route=="walkin_follow" | Route=="others" | Route=="rrs"
+		replace CC_5_abdp=1 if standardcc1=="腹痛" | standardcc1=="臍下部痛" | standardcc1=="心窩部痛" | standardcc1=="右上腹部痛" | standardcc1=="右下腹部痛" 
+		gen CC_6_ha=0
+		replace CC_6_ha=1 if standardcc1=="頭痛" 
+		gen CC_7_nausea=0
+		replace CC_7_nausea=1 if standardcc1=="嘔吐・嘔気"
 		
 		//Disposition
 		gen hosp=0 
 		replace hosp=1 if disposition=="入院" | disposition=="ICU" | disposition=="直接入院" 
 
-		gen icu=0
-		replace icu=1 if disposition=="ICU" 
+		//gen icu=0
+		//replace icu=1 if disposition=="ICU" 
 		
 		gen death=0
 		replace death=1 if tenki=="死亡" | disposition=="死亡"
 	
-	save "/Users/shokosoeno/Downloads/TXP_prq/analysis.dta", replace
+	save "/Users/shokosoeno/Desktop/TXP/prq/analysis.dta", replace
 	
 ///Data analysis
-	use "/Users/shokosoeno/Downloads/TXP_prq/analysis.dta", clear
+	use "/Users/shokosoeno/Desktop/TXP/prq/analysis.dta", clear
 	
 	//Characteristics of ED visits
 	//Use Table 1 command (findit table1)
@@ -156,48 +160,58 @@
 	*/ rr contn \ spo2 contn \ bt contn \ jtas cat \ route cat \ cci cat \/*
 	*/ hosp cat \ icu cat \ death cat \ staylength conts \ prq contn \ refi contn) format(%9.0f) sav (/Users/shokosoeno/Downloads/TXP_prq/table1) 
 	
+	
+	//LOWESS curve for hospitalization or death
+	twoway (lowess hosp rr) (lowess mv rr) (lowess death rr), /*
+	*/ legend(order(1 "hospitalization" 2 "mechanical ventilation" 3 "death") col(3)) /*
+    */                          ylabel(0(.5)1, angle(horiz) format(%2.1fc) ) ///
+                                xlabel(0(5)40) ///
+                                ytitle("Risk of clinical outcome") ///
+                                xtitle("Respiratory Rate")
 
-	//LOWESS curve
-	lowess hosp prq
-	lowess death prq
-	lowess hosp refi
-	lowess death refi
-	
-	//LOWESS for each CC
-	lowess hosp rr if CC_1_fever==1
-	lowess death rr if CC_1_fever==1
-	lowess hosp prq if CC_1_fever==1
-	lowess death prq if CC_1_fever==1
-	lowess hosp refi if CC_1_fever==1
-	lowess death refi if CC_1_fever==1
-		
-	lowess hosp rr if CC_2_shortbr==1
-	lowess death rr if CC_2_shortbr==1
-	lowess hosp prq if CC_2_shortbr==1
-	lowess death prq if CC_2_shortbr==1
-	lowess hosp refi if CC_2_shortbr==1
-	lowess death refi if CC_2_shortbr==1	
-	
-	lowess hosp rr if CC_3_mental==1
-	lowess death rr if CC_3_mental==1
-	lowess hosp prq if CC_3_mental==1
-	lowess death prq if CC_3_mental==1
-	lowess hosp refi if CC_3_mental==1
-	lowess death refi if CC_3_mental==1	
-	
-	lowess hosp rr if CC_4_chestp==1
-	lowess death rr if CC_4_chestp==1
-	lowess hosp prq if CC_4_chestp==1
-	lowess death prq if CC_4_chestp==1
-	lowess hosp refi if CC_4_chestp==1
-	lowess death refi if CC_4_chestp==1	
-	
-	lowess hosp rr if CC_5_abdp==1
-	lowess death rr if CC_5_abdp==1
-	lowess hosp prq if CC_5_abdp==1
-	lowess death prq if CC_5_abdp==1
-	lowess hosp refi if CC_5_abdp==1
-	lowess death refi if CC_5_abdp==1	
+	twoway (lowess hosp refi)(lowess mv refi) (lowess death refi), /*
+	*/ legend(order(1 "hospitalization" 2 "mechanical ventilation" 3 "death") col(3)) /*
+    */                          ylabel(0(.5)1, angle(horiz) format(%2.1fc) ) ///
+                                xlabel(0(10)50) ///
+                                ytitle("Risk of clinical outcome") ///
+                                xtitle("REFI")
+
+	twoway (lowess hosp prq)(lowess mv prq)(lowess death prq), /*
+	*/ legend(order(1 "hospitalization" 2 "mechanical ventilation" 3 "death") col(3)) /*
+    */                          ylabel(0(.5)1, angle(horiz) format(%2.1fc) ) ///
+                                xlabel(0(1)10) ///
+                                ytitle("Risk of clinical outcome") ///
+                                xtitle("PRQ")
+
+	//Lowess curve by CC
+	//RR
+	twoway (lowess hosp rr if CC_1_fever==1) /*
+	*/ (lowess hosp rr if CC_2_shortbr==1) (lowess hosp rr if CC_3_mental==1) /*
+	*/ (lowess hosp rr if CC_4_chestp==1) (lowess hosp rr if CC_5_abdp==1), /*
+	*/ legend(order(1 "Fever" 2 "Shortness of breath" 3 "Altered mental status" 4 "Chest pain" 5 "Abdominal pain") col(4)) /*
+    */                          ylabel(0(.5)1, angle(horiz) format(%2.1fc) ) ///
+                                xlabel(0(5)40) ///
+                                ytitle("Risk of hospitalization") ///
+                                xtitle("Respiratory Rate")
+	//REFI
+	twoway (lowess hosp refi if CC_1_fever==1) /*
+	*/ (lowess hosp refi if CC_2_shortbr==1) (lowess hosp refi if CC_3_mental==1) /*
+	*/ (lowess hosp refi if CC_4_chestp==1) (lowess hosp refi if CC_5_abdp==1), /*
+	*/ legend(order(1 "Fever" 2 "Shortness of breath" 3 "Altered mental status" 4 "Chest pain" 5 "Abdominal pain") col(4)) /*
+    */                          ylabel(0(.5)1, angle(horiz) format(%2.1fc) ) ///
+                                xlabel(10(10)50) ///
+                                ytitle("Risk of hospitalization") ///
+                                xtitle("REFI")
+
+	//PRQ
+	twoway (lowess hosp prq if CC_1_fever==1) /*
+	*/ (lowess hosp prq if CC_2_shortbr==1) (lowess hosp prq if CC_3_mental==1) /*
+	*/ (lowess hosp prq if CC_4_chestp==1) (lowess hosp prq if CC_5_abdp==1), /*
+	*/ legend(order(1 "Fever" 2 "Shortness of breath" 3 "Altered mental status" 4 "Chest pain" 5 "Abdominal pain") col(4)) /*
+    */                          ylabel(0(.5)1, angle(horiz) format(%2.1fc) ) ///
+                                xlabel(0(1)10) ///
+                                ytitle("Risk of hospitalization") ///
+                                xtitle("PRQ")
 	
 	//Cubic spline regression
 	//install xbrcspline 
@@ -209,379 +223,188 @@
 	logit hosp rrs*
 	
 	xbrcspline rrs , matknots(knots) ///
-	values(2 3 4 5 6 7 8 9 10) ///
-	ref(12) eform gen(rr_f or lb ub)
+	values(8 12 16 20 24 28 32) ///
+	ref(16) eform gen(rr_f or lb ub)
 	
 	twoway (line lb ub or rr_f, lp(- - l) lc(black black black) ) ///
-                if inrange(rr_f, 0,11)  , ///
+                if inrange(rr_f, 0,32)  , ///
                                 scheme(s1mono) legend(off) ///
-                                ylabel(0(.5)3, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(1(1)11) ///
+                                ylabel(0(1)3, angle(horiz) format(%2.1fc) ) ///
+                                xlabel(8(1)32) ///
                                 ytitle("Odds ratio of hospitalization") ///
                                 xtitle("Respiratory Rate")
 	restore
-	
-	//Cubic spline for pqr and hosp 
-	preserve
-	mkspline prqs = prq , nknots(7) cubic displayknots
-	mat knots = r(knots)
-	logit hosp prqs*
-	
-	xbrcspline prqs , matknots(knots) ///
-	values(2 3 4 5 6 7 8 9 10) ///
-	ref(4) eform gen(prq_f or lb ub)
-	
-	twoway (line lb ub or prq_f, lp(- - l) lc(black black black) ) ///
-                if inrange(prq_f, 0,11)  , ///
-                                scheme(s1mono) legend(off) ///
-                                ylabel(0(.5)3, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(1(1)11) ///
-                                ytitle("Odds ratio of hospitalization") ///
-                                xtitle("Pulse-respiration quotient")
-	restore
-
-	//Cubic spline for refi and hosp 
-	//drop refis1 refis2 refis3 refis4 refis5 refis6
-	preserve
-	mkspline refis = refi , nknots(7) cubic displayknots
-	mat knots = r(knots)
-	logit hosp refis*
-	
-	xbrcspline refis , matknots(knots) ///
-	values(5 10 15 20 25 30 35 40 45 50) ///
-	ref(15) eform gen(refi_f or lb ub)
-	
-		twoway (line lb ub or refi_f, lp(- - l) lc(black black black) ) ///
-                if inrange(refi_f, 0, 55)  , ///
-                                scheme(s1mono) legend(off) ///
-                                ylabel(0(.5)8, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(0(5)55) ///
-                                ytitle("Odds ratio of hospitalization") ///
-                                xtitle("Respiratory Efficacy Index")
-	restore
-
-	//Cubic spline for pqr and death 
-	//drop prqs1 prqs2 prqs3 prqs4 prqs5 prqs6
-	mkspline prqs = prq , nknots(7) cubic displayknots
-	mat knots = r(knots)
-	logit death prqs*
-	
-	xbrcspline prqs , matknots(knots) ///
-	values(2 3 4 5 6 7 8 9 10) ///
-	ref(6) eform
-
-	//Cubic spline for refi and death
-	//drop refis1 refis2 refis3 refis4 refis5 refis6
-	mkspline refis = refi , nknots(7) cubic displayknots
-	mat knots = r(knots)
-	logit death refis*
-	
-	xbrcspline refis , matknots(knots) ///
-	values(5 10 15 20 25 30 35 40 45 50) ///
-	ref(15) eform
-	
-	//Cubic spline for each CC ///////////////////////////
-	
-	//Cubic spline for PRQ and hosp in patients with fever
-	preserve 
-	keep if CC_1_fever == 1
-	mkspline prqs = prq , nknots(7) cubic displayknots
-	mat knots = r(knots)
-	logit hosp prqs*
-	
-	xbrcspline prqs , matknots(knots) ///
-	values(2 3 4 5 6 7 8 9 10) ///
-	ref(4) eform gen(prq_f or lb ub)
-	
-	twoway (line lb ub or prq_f, lp(- - l) lc(black black black) ) ///
-                if inrange(prq_f, 0,11)  , ///
-                                scheme(s1mono) legend(off) ///
-                                ylabel(0(.5)3, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(1(1)11) ///
-                                ytitle("Odds ratio of hospitalization") ///
-                                xtitle("Pulse-respiration quotient")
-	restore
-	
-	//Cubic spline for REFI and hosp in patients with fever
-	preserve
-	keep if CC_1_fever == 1
-	mkspline refis = refi , nknots(7) cubic displayknots
-	mat knots = r(knots)
-	logit hosp refis*
-	
-	xbrcspline refis , matknots(knots) ///
-	values(5 10 15 20 25 30 35 40 45 50) ///
-	ref(15) eform gen(refi_f or lb ub)
-	
-	twoway (line lb ub or refi_f, lp(- - l) lc(black black black) ) ///
-                if inrange(refi_f, 0, 55)  , ///
-                                scheme(s1mono) legend(off) ///
-                                ylabel(0(.5)8, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(0(5)55) ///
-                                ytitle("Odds ratio of hospitalization") ///
-                                xtitle("Respiratory Efficacy Index")
-	restore
-	
-	//Cubic spline for RR and hosp in patients with fever
+	//Cubic spline for rr and hosp by CC
 	preserve 
 	keep if CC_1_fever == 1
 	mkspline rrs = rr , nknots(7) cubic displayknots
 	mat knots = r(knots)
 	logit hosp rrs*
-	
 	xbrcspline rrs , matknots(knots) ///
-	values(2 3 4 5 6 7 8 9 10) ///
-	ref(12) eform gen(rr_f or lb ub)
-	
-	twoway (line lb ub or rr_f, lp(- - l) lc(black black black) ) ///
-                if inrange(rr_f, 0,11)  , ///
-                                scheme(s1mono) legend(off) ///
-                                ylabel(0(.5)3, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(1(1)11) ///
-                                ytitle("Odds ratio of hospitalization") ///
-                                xtitle("Respiratory Rate")
-	restore
-	
-	//Cubic spline for PRQ and hosp in patients with SOB
-	preserve 
-	keep if CC_2_shortbr == 1
-	mkspline prqs = prq , nknots(7) cubic displayknots
-	mat knots = r(knots)
-	logit hosp prqs*
-	
-	xbrcspline prqs , matknots(knots) ///
-	values(2 3 4 5 6 7 8 9 10) ///
-	ref(4) eform gen(prq_f or lb ub)
-	
-	twoway (line lb ub or prq_f, lp(- - l) lc(black black black) ) ///
-                if inrange(prq_f, 0,11)  , ///
-                                scheme(s1mono) legend(off) ///
-                                ylabel(0(.5)3, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(1(1)11) ///
-                                ytitle("Odds ratio of hospitalization") ///
-                                xtitle("Pulse-respiration quotient")
-	restore
-	
-	//Cubic spline for REFI and hosp in patients with SOB
-	preserve
-	keep if CC_2_shortbr == 1
-	mkspline refis = refi , nknots(7) cubic displayknots
-	mat knots = r(knots)
-	logit hosp refis*
-	
-	xbrcspline refis , matknots(knots) ///
-	values(5 10 15 20 25 30 35 40 45 50) ///
-	ref(15) eform gen(refi_f or lb ub)
-	
-	twoway (line lb ub or refi_f, lp(- - l) lc(black black black) ) ///
-                if inrange(refi_f, 0, 55)  , ///
-                                scheme(s1mono) legend(off) ///
-                                ylabel(0(.5)8, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(0(5)55) ///
-                                ytitle("Odds ratio of hospitalization") ///
-                                xtitle("Respiratory Efficacy Index")
-	restore
-	
-	//Cubic spline for RR and hosp in patients with SOB
-	preserve 
-	keep if CC_2_shortbr == 1
-	mkspline rrs = rr , nknots(7) cubic displayknots
-	mat knots = r(knots)
-	logit hosp rrs*
-	
-	xbrcspline rrs , matknots(knots) ///
-	values(2 3 4 5 6 7 8 9 10) ///
-	ref(12) eform gen(rr_f or lb ub)
-	
-	twoway (line lb ub or rr_f, lp(- - l) lc(black black black) ) ///
-                if inrange(rr_f, 0,11)  , ///
-                                scheme(s1mono) legend(off) ///
-                                ylabel(0(.5)3, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(1(1)11) ///
-                                ytitle("Odds ratio of hospitalization") ///
-                                xtitle("Respiratory Rate")
+	values(8 12 16 20 24 28 32) ///
+	ref(16) eform gen(rr_f or lb ub)
 	restore
 
-	//Cubic spline for PRQ and hosp in patients with AMS
 	preserve 
-	keep if CC_3_mental == 1 
-	mkspline prqs = prq , nknots(7) cubic displayknots
-	mat knots = r(knots)
-	logit hosp prqs*
-	
-	xbrcspline prqs , matknots(knots) ///
-	values(2 3 4 5 6 7 8 9 10) ///
-	ref(4) eform gen(prq_f or lb ub)
-	
-	twoway (line lb ub or prq_f, lp(- - l) lc(black black black) ) ///
-                if inrange(prq_f, 0,11)  , ///
-                                scheme(s1mono) legend(off) ///
-                                ylabel(0(.5)3, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(1(1)11) ///
-                                ytitle("Odds ratio of hospitalization") ///
-                                xtitle("Pulse-respiration quotient")
-	restore
-	
-	//Cubic spline for REFI and hosp in patients with AMS
-	preserve
-	keep if CC_3_mental == 1 
-	mkspline refis = refi , nknots(7) cubic displayknots
-	mat knots = r(knots)
-	logit hosp refis*
-	
-	xbrcspline refis , matknots(knots) ///
-	values(5 10 15 20 25 30 35 40 45 50) ///
-	ref(15) eform gen(refi_f or lb ub)
-	
-	twoway (line lb ub or refi_f, lp(- - l) lc(black black black) ) ///
-                if inrange(refi_f, 0, 55)  , ///
-                                scheme(s1mono) legend(off) ///
-                                ylabel(0(.5)8, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(0(5)55) ///
-                                ytitle("Odds ratio of hospitalization") ///
-                                xtitle("Respiratory Efficacy Index")
-	restore
-	
-	//Cubic spline for RR and hosp in patients with AMS
-	preserve 
-	keep if CC_3_mental == 1 
+	keep if CC_2_shortbr==1
 	mkspline rrs = rr , nknots(7) cubic displayknots
 	mat knots = r(knots)
 	logit hosp rrs*
-	
 	xbrcspline rrs , matknots(knots) ///
-	values(2 3 4 5 6 7 8 9 10) ///
-	ref(12) eform gen(rr_f or lb ub)
-	
-	twoway (line lb ub or rr_f, lp(- - l) lc(black black black) ) ///
-                if inrange(rr_f, 0,11)  , ///
-                                scheme(s1mono) legend(off) ///
-                                ylabel(0(.5)3, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(1(1)11) ///
-                                ytitle("Odds ratio of hospitalization") ///
-                                xtitle("Respiratory Rate")
+	values(8 12 16 20 24 28 32) ///
+	ref(16) eform gen(rr_f or lb ub)
 	restore
-	
-	//Cubic spline for PRQ and hosp in patients with chest pain
+
 	preserve 
-	keep if CC_4_chestp == 1 
-	mkspline prqs = prq , nknots(7) cubic displayknots
-	mat knots = r(knots)
-	logit hosp prqs*
-	
-	xbrcspline prqs , matknots(knots) ///
-	values(2 3 4 5 6 7 8 9 10) ///
-	ref(4) eform gen(prq_f or lb ub)
-	
-	twoway (line lb ub or prq_f, lp(- - l) lc(black black black) ) ///
-                if inrange(prq_f, 0,11)  , ///
-                                scheme(s1mono) legend(off) ///
-                                ylabel(0(.5)3, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(1(1)11) ///
-                                ytitle("Odds ratio of hospitalization") ///
-                                xtitle("Pulse-respiration quotient")
-	restore
-	
-	//Cubic spline for REFI and hosp in patients with chest pain
-	preserve
-	keep if CC_4_chestp == 1 
-	mkspline refis = refi , nknots(7) cubic displayknots
-	mat knots = r(knots)
-	logit hosp refis*
-	
-	xbrcspline refis , matknots(knots) ///
-	values(5 10 15 20 25 30 35 40 45 50) ///
-	ref(15) eform gen(refi_f or lb ub)
-	
-	twoway (line lb ub or refi_f, lp(- - l) lc(black black black) ) ///
-                if inrange(refi_f, 0, 55)  , ///
-                                scheme(s1mono) legend(off) ///
-                                ylabel(0(.5)8, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(0(5)55) ///
-                                ytitle("Odds ratio of hospitalization") ///
-                                xtitle("Respiratory Efficacy Index")
-	restore
-	
-	//Cubic spline for RR and hosp in patients with chest pain
-	preserve 
-	keep if CC_4_chestp == 1 
+	keep if CC_3_mental == 1
 	mkspline rrs = rr , nknots(7) cubic displayknots
 	mat knots = r(knots)
 	logit hosp rrs*
-	
 	xbrcspline rrs , matknots(knots) ///
-	values(2 3 4 5 6 7 8 9 10) ///
-	ref(12) eform gen(rr_f or lb ub)
-	
-	twoway (line lb ub or rr_f, lp(- - l) lc(black black black) ) ///
-                if inrange(rr_f, 0,11)  , ///
-                                scheme(s1mono) legend(off) ///
-                                ylabel(0(.5)3, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(1(1)11) ///
-                                ytitle("Odds ratio of hospitalization") ///
-                                xtitle("Respiratory Rate")
+	values(8 12 16 20 24 28 32) ///
+	ref(16) eform gen(rr_f or lb ub)
 	restore
-	
-	//Cubic spline for PRQ and hosp in patients with abdominal pain
+
 	preserve 
-	keep if CC_5_abdp == 1 
-	mkspline prqs = prq , nknots(7) cubic displayknots
-	mat knots = r(knots)
-	logit hosp prqs*
-	
-	xbrcspline prqs , matknots(knots) ///
-	values(2 3 4 5 6 7 8 9 10) ///
-	ref(4) eform gen(prq_f or lb ub)
-	
-	twoway (line lb ub or prq_f, lp(- - l) lc(black black black) ) ///
-                if inrange(prq_f, 0,11)  , ///
-                                scheme(s1mono) legend(off) ///
-                                ylabel(0(.5)3, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(1(1)11) ///
-                                ytitle("Odds ratio of hospitalization") ///
-                                xtitle("Pulse-respiration quotient")
-	restore
-	
-	//Cubic spline for REFI and hosp in patients with abdominal pain
-	preserve
-	keep if CC_5_abdp == 1 
-	mkspline refis = refi , nknots(7) cubic displayknots
-	mat knots = r(knots)
-	logit hosp refis*
-	
-	xbrcspline refis , matknots(knots) ///
-	values(5 10 15 20 25 30 35 40 45 50) ///
-	ref(15) eform gen(refi_f or lb ub)
-	
-	twoway (line lb ub or refi_f, lp(- - l) lc(black black black) ) ///
-                if inrange(refi_f, 0, 55)  , ///
-                                scheme(s1mono) legend(off) ///
-                                ylabel(0(.5)8, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(0(5)55) ///
-                                ytitle("Odds ratio of hospitalization") ///
-                                xtitle("Respiratory Efficacy Index")
-	restore
-	
-	//Cubic spline for RR and hosp in patients with abdominal pain
-	preserve 
-	keep if CC_5_abdp == 1 
+	keep if CC_4_chestp ==1
 	mkspline rrs = rr , nknots(7) cubic displayknots
 	mat knots = r(knots)
 	logit hosp rrs*
-	
 	xbrcspline rrs , matknots(knots) ///
-	values(2 3 4 5 6 7 8 9 10) ///
-	ref(12) eform gen(rr_f or lb ub)
-	
-	twoway (line lb ub or rr_f, lp(- - l) lc(black black black) ) ///
-                if inrange(rr_f, 0,11)  , ///
-                                scheme(s1mono) legend(off) ///
-                                ylabel(0(.5)3, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(1(1)11) ///
-                                ytitle("Odds ratio of hospitalization") ///
-                                xtitle("Respiratory Rate")
+	values(8 12 16 20 24 28 32) ///
+	ref(16) eform gen(rr_f or lb ub)
+	restore
+
+	preserve 
+	keep if CC_5_abdp ==1
+	mkspline rrs = rr , nknots(7) cubic displayknots
+	mat knots = r(knots)
+	logit hosp rrs*
+	xbrcspline rrs , matknots(knots) ///
+	values(8 12 16 20 24 28 32) ///
+	ref(16) eform gen(rr_f or lb ub)
+	restore
+
+	//Cubic spline for refi and hosp by cc
+	preserve
+	mkspline refis = refi , nknots(7) cubic displayknots
+	mat knots = r(knots)
+	logit hosp refis*
+	xbrcspline refis , matknots(knots) ///
+	values(10 15 20 25 30 35 40) ///
+	ref(20) eform gen(refi_f or lb ub)
+	restore
+
+	preserve
+	keep if CC_1_fever == 1
+	mkspline refis = refi , nknots(7) cubic displayknots
+	mat knots = r(knots)
+	logit hosp refis*
+	xbrcspline refis , matknots(knots) ///
+	values(10 15 20 25 30 35 40) ///
+	ref(20) eform gen(refi_f or lb ub)
+	restore
+
+	preserve 
+	keep if CC_2_shortbr==1
+	mkspline refis = refi , nknots(7) cubic displayknots
+	mat knots = r(knots)
+	logit hosp refis*
+	xbrcspline refis , matknots(knots) ///
+	values(10 15 20 25 30 35 40) ///
+	ref(20) eform gen(refi_f or lb ub)
+	restore
+
+	preserve 
+	keep if CC_3_mental == 1
+	mkspline refis = refi , nknots(7) cubic displayknots
+	mat knots = r(knots)
+	logit hosp refis*
+	xbrcspline refis , matknots(knots) ///
+	values(10 15 20 25 30 35 40) ///
+	ref(20) eform gen(refi_f or lb ub)
+	restore
+
+	preserve 
+	keep if CC_4_chestp ==1
+	mkspline refis = refi , nknots(7) cubic displayknots
+	mat knots = r(knots)
+	logit hosp refis*
+	xbrcspline refis , matknots(knots) ///
+	values(10 15 20 25 30 35 40) ///
+	ref(20) eform gen(refi_f or lb ub)
+	restore
+
+	preserve 
+	keep if CC_5_abdp ==1
+	mkspline refis = refi , nknots(7) cubic displayknots
+	mat knots = r(knots)
+	logit hosp refis*
+	xbrcspline refis , matknots(knots) ///
+	values(10 15 20 25 30 35 40) ///
+	ref(20) eform gen(refi_f or lb ub)
 	restore
 	
+	//Cubic spline for pqr and hosp by cc
+	preserve
+	mkspline prqs = prq , nknots(7) cubic displayknots
+	mat knots = r(knots)
+	logit hosp prqs*
+	xbrcspline prqs , matknots(knots) ///
+	values(2 3 4 5 6 7 8) ///
+	ref(4) eform gen(prq_f or lb ub)
+	restore
+
+	preserve
+	keep if CC_1_fever == 1
+	mkspline prqs = prq , nknots(7) cubic displayknots
+	mat knots = r(knots)
+	logit hosp prqs*
+	xbrcspline prqs , matknots(knots) ///
+	values(2 3 4 5 6 7 8) ///
+	ref(4) eform gen(prq_f or lb ub)
+	restore
+
+	preserve 
+	keep if CC_2_shortbr==1
+	mkspline prqs = prq , nknots(7) cubic displayknots
+	mat knots = r(knots)
+	logit hosp prqs*
+	xbrcspline prqs , matknots(knots) ///
+	values(2 3 4 5 6 7 8) ///
+	ref(4) eform gen(prq_f or lb ub)
+	restore
+
+	preserve 
+	keep if CC_3_mental == 1
+	mkspline prqs = prq , nknots(7) cubic displayknots
+	mat knots = r(knots)
+	logit hosp prqs*
+	xbrcspline prqs , matknots(knots) ///
+	values(2 3 4 5 6 7 8) ///
+	ref(4) eform gen(prq_f or lb ub)
+	restore
+
+	preserve 
+	keep if CC_4_chestp ==1
+	mkspline prqs = prq , nknots(7) cubic displayknots
+	mat knots = r(knots)
+	logit hosp prqs*
+	xbrcspline prqs , matknots(knots) ///
+	values(2 3 4 5 6 7 8) ///
+	ref(4) eform gen(prq_f or lb ub)
+	restore
+
+	preserve 
+	keep if CC_5_abdp ==1
+	mkspline prqs = prq , nknots(7) cubic displayknots
+	mat knots = r(knots)
+	logit hosp prqs*
+	xbrcspline prqs , matknots(knots) ///
+	values(2 3 4 5 6 7 8) ///
+	ref(4) eform gen(prq_f or lb ub)
+	restore
+
 	//主訴別のdiagnosisのtop3
 	tabulate diagnosis if CC_1_fever==1, sort
 	tabulate diagnosis if CC_2_shortbr==1, sort

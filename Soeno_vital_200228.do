@@ -85,23 +85,26 @@
 		//Drop children and missing age
 		drop if age==.
 		drop if age<18
+
+		//drop if the dprimary diagoniss is I46 or S00-U99
+		//もう少し賢いやり方がありそうなので後藤先生に聞いてみる
+		gen dia_new = substr(diagnosis,1,1)
+		drop if dia_new == "S" |  dia_new == "T"| dia_new == "V"| dia_new == "W"| dia_new == "X"| dia_new == "Y"
+		drop if diagnosis == "I46" //0 observations deleted
+		drop if dia_new == "Z"| dia_new == "U"
+		 
+		
+		///Drop CPA
+		drop if cpa_flag==1 | pr==0 | rr==0 | spo2==0
 		
 		///Drop missing data on respiratory rate
 		drop if pr==. | rr==. | spo2==.
-
-		///Drop CPA
-		drop if cpa_flag==1 | pr==0 | rr==0 | spo2==0
 		
 		//Drop outliers
 		drop if pr<10 | pr>300
 		drop if rr<3 | rr>60
 		drop if spo2<10 | spo2>100
 
-		//drop if the dprimary diagoniss is I46 or S00-U99 ...0 observations deleted
-		//もう少し賢いやり方がありそうなので後藤先生に聞いてみる
-		//drop if diagnosis = "I46"
-		//gen dia_new = substr(diagnosis,1,1)
-		//drop if dia_new == "S" |  dia_new == "T" | dia_new == "U"
 		
 		//Generalte pulse-respiration quotient (PRQ) and REFI
 		gen prq=pr/rr
@@ -110,6 +113,9 @@
 		replace prq = 8 if prq >8
 		replace refi = 10 if refi < 10
 		replace refi = 40 if refi > 40
+		//RRのグラフは8未満は全て8、30（もしくは35）以上は全て30、REFIは15以下を全て15にしてFigureの範囲を変更
+		replace rr = 8 if rr < 8
+		replace rr = 35 if rr > 35
 		
 		//Age category
 		gen agecat=1 if age>=18 & age<40
@@ -158,28 +164,29 @@
 	//Output table1
 	table1, vars(age contn \ sex cat \ sbp contn \ dbp contn \ pr contn \ /*
 	*/ rr contn \ spo2 contn \ bt contn \ jtas cat \ route cat \ cci cat \/*
-	*/ hosp cat \ icu cat \ death cat \ staylength conts \ prq contn \ refi contn) format(%9.0f) sav (/Users/shokosoeno/Downloads/TXP_prq/table1) 
+	*/ hosp cat \ mv cat \ death cat \ staylength conts \ prq contn \ refi contn \/*
+	*/ CC_1_fever cat\ CC_2_shortbr cat\CC_3_mental cat\ CC_4_chestp cat\ CC_5_abdp cat\) format(%9.0f) sav (/Users/shokosoeno/Desktop/TXP/prq/table1) 
 	
 	
 	//LOWESS curve for hospitalization or death
 	twoway (lowess hosp rr) (lowess mv rr) (lowess death rr), /*
 	*/ legend(order(1 "hospitalization" 2 "mechanical ventilation" 3 "death") col(3)) /*
     */                          ylabel(0(.5)1, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(0(5)40) ///
+                                xlabel(8(4)32) ///
                                 ytitle("Risk of clinical outcome") ///
                                 xtitle("Respiratory Rate")
 
 	twoway (lowess hosp refi)(lowess mv refi) (lowess death refi), /*
 	*/ legend(order(1 "hospitalization" 2 "mechanical ventilation" 3 "death") col(3)) /*
     */                          ylabel(0(.5)1, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(0(10)50) ///
+                                xlabel(10(10)40) ///
                                 ytitle("Risk of clinical outcome") ///
                                 xtitle("REFI")
 
 	twoway (lowess hosp prq)(lowess mv prq)(lowess death prq), /*
 	*/ legend(order(1 "hospitalization" 2 "mechanical ventilation" 3 "death") col(3)) /*
     */                          ylabel(0(.5)1, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(0(1)10) ///
+                                xlabel(2(1)8) ///
                                 ytitle("Risk of clinical outcome") ///
                                 xtitle("PRQ")
 
@@ -190,7 +197,7 @@
 	*/ (lowess hosp rr if CC_4_chestp==1) (lowess hosp rr if CC_5_abdp==1), /*
 	*/ legend(order(1 "Fever" 2 "Shortness of breath" 3 "Altered mental status" 4 "Chest pain" 5 "Abdominal pain") col(4)) /*
     */                          ylabel(0(.5)1, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(0(5)40) ///
+                                xlabel(8(4)32) ///
                                 ytitle("Risk of hospitalization") ///
                                 xtitle("Respiratory Rate")
 	//REFI
@@ -199,7 +206,7 @@
 	*/ (lowess hosp refi if CC_4_chestp==1) (lowess hosp refi if CC_5_abdp==1), /*
 	*/ legend(order(1 "Fever" 2 "Shortness of breath" 3 "Altered mental status" 4 "Chest pain" 5 "Abdominal pain") col(4)) /*
     */                          ylabel(0(.5)1, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(10(10)50) ///
+                                xlabel(10(10)40) ///
                                 ytitle("Risk of hospitalization") ///
                                 xtitle("REFI")
 
@@ -209,7 +216,7 @@
 	*/ (lowess hosp prq if CC_4_chestp==1) (lowess hosp prq if CC_5_abdp==1), /*
 	*/ legend(order(1 "Fever" 2 "Shortness of breath" 3 "Altered mental status" 4 "Chest pain" 5 "Abdominal pain") col(4)) /*
     */                          ylabel(0(.5)1, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(0(1)10) ///
+                                xlabel(2(1)8) ///
                                 ytitle("Risk of hospitalization") ///
                                 xtitle("PRQ")
 	
@@ -230,7 +237,7 @@
                 if inrange(rr_f, 0,32)  , ///
                                 scheme(s1mono) legend(off) ///
                                 ylabel(0(1)3, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(8(1)32) ///
+                                xlabel(8(5)32) ///
                                 ytitle("Odds ratio of hospitalization") ///
                                 xtitle("Respiratory Rate")
 	restore

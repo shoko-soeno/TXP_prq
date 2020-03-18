@@ -54,12 +54,20 @@
 
 	gen mv_ref=0
 		replace mv_ref=1 if procedure_code=="J044" | procedure_code=="J045" 
+	gen nippv_ref=0
+		replace nippv_ref=1 if procedure_code=="J026"
 		
 		bysort encounter_id: egen mv=sum(mv_ref)
 		bysort encounter_id: gen n_by_id=_n
 		keep if n_by_id==1
 		replace mv=1 if mv>=1 & mv<.
-		keep encounter_id mv
+
+		bysort encounter_id: egen nippv=sum(nippv_ref)
+		bysort encounter_id: gen n_by_id_nippv=_n
+		keep if n_by_id_nippv==1
+		replace nippv=1 if nippv>=1 & nippv<.
+
+		keep encounter_id mv nippv
 	save "/Users/shokosoeno/Downloads/TXP_pp/mv.dta", replace
 
 //merge vital data and dpc data
@@ -100,47 +108,14 @@
 		gen CC_7_nausea=0
 		replace CC_7_nausea=1 if standardcc1=="嘔吐・嘔気"
 
-		replace  mv=0 if mv==.
+		replace mv=0 if mv==.
+		replace nippv=0 if nippv==.
 		
+		//disposition
 		gen hosp=0 
 		replace hosp=1 if disposition=="入院" | disposition=="ICU" | disposition=="直接入院" 
-		
-		//gen death=0
-		//replace death=1 if disposition=="死亡"　// tenki=="死亡"
-	
-		save "/Users/shokosoeno/Downloads/TXP_pp/analysis.dta", replace
-
-		////////////////////////////
-
-
-		
-		
-
-
-		replace  mv=0 if mv==.
-
-		//drop if the dprimary diagoniss is I46 or S00-U99 ...0 observations deleted
-		//drop if diagnosis = "I46"
-		//gen dia_new = substr(diagnosis,1,1)
-		//drop if dia_new == "S" |  dia_new == "T" | dia_new == "U"
-		
-		//Generalte PP index = PP/(1/2 * SBP)
-		//gen pp = sbp-dbp
-		tab pp
-		gen pp_index = pp/(0.5 * sbp)
-		tab pp_index
-		
-		//Disposition
-		gen hosp=0 
-		replace hosp=1 if disposition=="入院" | disposition=="ICU" | disposition=="直接入院" 
-
-		gen icu=0
-		replace icu=1 if disposition=="ICU" 
-		
 		gen death=0
 		replace death=1 if disposition=="死亡"
-
-
 	
 	save "/Users/shokosoeno/Downloads/TXP_pp/analysis.dta", replace
 	
@@ -154,136 +129,121 @@
 	drop if age<18
 	drop if age==.
 
+	//drop if the primary diagoniss is I46 or S00-U99
+	gen diag_1 = substr(icd10,1,1)
+	gen diag_3 = substr(icd10,1,3)
+	drop if diag_1 == "S" |  diag_1 == "T"| diag_1 == "V"| diag_1 == "W"| diag_1 == "X"| diag_1 == "Y"
+	drop if diag_3 == "I46" //cardiac arrest
+	drop if diag_1 == "Z"| diag_1 == "U"
+
 	//Change outliers to missing
 	replace sbp=. if sbp<20 | sbp>300
-	replace dbp=. if dbp<20 | dbp>300
+	replace dbp=. if dbp<20 | dbp>300 | sbp < dbp
 	replace bt=. if bt<20 | bt>45
 
-	//Drop outliers
-	//drop if sbp < dbp
+	//Generalte PP index = PP/(1/2 * SBP)
+	gen pp = sbp-dbp
+	tab pp
+	gen pp_index = pp/(0.5 * sbp)
+	tab pp_index
 
 	//Characteristics of ED visits
 	//Output table1
 	table1, vars(age contn \ sex cat \ sbp contn \ dbp contn \ pr contn \ /*
 	*/ rr contn \ spo2 contn \ bt contn \ jtas cat \ route cat \ /*
-	*/ hosp cat \ icu cat \ death cat \ pp_index contn) format(%9.0f) sav (/Users/shokosoeno/Downloads/TXP_pp/table1) 
+	*/ hosp cat \ mv cat \ nippv cat \ death cat \ pp_index contn) format(%9.0f) sav (/Users/shokosoeno/Downloads/TXP_pp/table1) 
 	//staylength conts \ cci cat \
 	
 	//pp_indexの分布
 	hist pp_index
 	centile (pp_index), centile (5 25 50 75 95)
 	centile (pp_index), centile (10 20 30 40 50 60 70 80 90 100)
-	tabulate diagnosis if pp_index < 0.58, sort
+	tabulate icd10 if pp_index < 0.58, sort
 	tabulate disposition if pp_index < 0.58,
-	tabulate diagnosis if pp_index < 0.67 & pp_index >= 0.58, sort
+	tabulate icd10 if pp_index < 0.67 & pp_index >= 0.58, sort
 	tabulate disposition if pp_index < 0.67 & pp_index >= 0.58
-	tabulate diagnosis if pp_index < 0.73 & pp_index >= 0.67, sort
+	tabulate icd10 if pp_index < 0.73 & pp_index >= 0.67, sort
 	tabulate disposition if pp_index < 0.73 & pp_index >= 0.67
-	tabulate diagnosis if pp_index < 0.78 & pp_index >= 0.73, sort
+	tabulate icd10 if pp_index < 0.78 & pp_index >= 0.73, sort
 	tabulate disposition if pp_index < 0.78 & pp_index >= 0.73
-	tabulate diagnosis if pp_index < 0.82 & pp_index >= 0.78, sort
+	tabulate icd10 if pp_index < 0.82 & pp_index >= 0.78, sort
 	tabulate disposition if pp_index < 0.82 & pp_index >= 0.78
-	tabulate diagnosis if pp_index < 0.87 & pp_index >= 0.82, sort
+	tabulate icd10 if pp_index < 0.87 & pp_index >= 0.82, sort
 	tabulate disposition if pp_index < 0.87 & pp_index >= 0.82
-	tabulate diagnosis if pp_index < 0.92 & pp_index >= 0.87, sort
+	tabulate icd10 if pp_index < 0.92 & pp_index >= 0.87, sort
 	tabulate disposition if pp_index < 0.92 & pp_index >= 0.87
-	tabulate diagnosis if pp_index < 0.98 & pp_index >= 0.92, sort
+	tabulate icd10 if pp_index < 0.98 & pp_index >= 0.92, sort
 	tabulate disposition if pp_index < 0.98 & pp_index >= 0.92
-	tabulate diagnosis if pp_index < 1.07 & pp_index >= 0.98, sort
+	tabulate icd10 if pp_index < 1.07 & pp_index >= 0.98, sort
 	tabulate disposition if pp_index < 1.07 & pp_index >= 0.98
-	tabulate diagnosis if pp_index < 1.91 & pp_index >= 1.07, sort
+	tabulate icd10 if pp_index < 1.91 & pp_index >= 1.07, sort
 	tabulate disposition if pp_index < 1.91 & pp_index >= 1.07
-	
-	//Cubic spline for pp_index and hosp 
-	preserve
-	mkspline pp_indexs = pp_index , nknots(5) cubic displayknots
-	mat knots = r(knots)
-	logit hosp pp_indexs*
-	
-	xbrcspline pp_indexs , matknots(knots) ///
-	values(0.5 0.7 0.8 0.9 1.1) ///
-	ref() eform gen(pp_index_f or lb ub)
-	
-	twoway (line lb ub or pp_index_f, lp(- - l) lc(black black black) ) ///
-                if inrange(pp_index_f, 0,2)  , ///
-                                scheme(s1mono) legend(off) ///
-                                ylabel(0(.5)1, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(0.6(.1)1.1) ///
-                                ytitle("Odds ratio of hospitalization") ///
-                                xtitle("pp_index")
-	restore
-	//////////////////////////////////////////////
-
-	//Cubic spline for pp_index and death 
-	preserve
-	mkspline pp_indexs = pp_index , nknots(5) cubic displayknots
-	mat knots = r(knots)
-	logit death pp_indexs*
-	
-	xbrcspline pp_indexs , matknots(knots) ///
-	values(0.5 0.7 0.8 0.9 1.1) ///
-	ref() eform gen(pp_index_f or lb ub)
-	
-	twoway (line lb ub or pp_index_f, lp(- - l) lc(black black black) ) ///
-                if inrange(pp_index_f, 0,2)  , ///
-                                scheme(s1mono) legend(off) ///
-                                ylabel(0(.5)1, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(0.6(.1)1.1) ///
-                                ytitle("Odds ratio of hospitalization") ///
-                                xtitle("pp_index")
-	restore
 
 	//LOWESS curve
 	lowess hosp pp_index
 	lowess death pp_index
 
-	//twoway (lowess hosp bt2 if CC_1_fever==1) /*
-	//*/ (lowess hosp bt2 if CC_2_shortbr==1) (lowess hosp bt2 if CC_3_mental==1) /*
-	//*/ (lowess hosp bt2 if CC_4_chestp==1) (lowess hosp bt2 if CC_5_abdp==1) /*
-	//*/ (lowess hosp bt2 if CC_6_ha==1) (lowess hosp bt2 if CC_7_nausea==1), /*
-	//*/ legend(order(1 "発熱" 2 "呼吸困難" 3 "意識障害" 4 "胸痛" 5 "腹痛" 6 "頭痛" 7 "嘔気") col(4)) /*
-    //*/                          ylabel(0(.5)1, angle(horiz) format(%2.1fc) ) ///
-                                //xlabel(35(.5)40) ///
-                                //ytitle("Risk of hospitalization") ///
-                                //xtitle("Body temperature")
-	
-	//Cubic spline for each CC ///////////////////////////
-	
-	//Cubic spline for pp_index and hosp in patients with fever
-	preserve 
-	keep if CC_1_fever == 1
-	mkspline pp_indexs = pp_index , nknots(7) cubic displayknots
+	//Cubic spline for pp_index and hosp
+	preserve
+	mkspline pp_indexs = pp_index , nknots(6) cubic displayknots
 	mat knots = r(knots)
 	logit hosp pp_indexs*
 	
 	xbrcspline pp_indexs , matknots(knots) ///
-	values(2 3 4 5 6 7 8 9 10) ///
-	ref(4) eform gen(pp_index_f or lb ub)
+	values(0 0.4 0.8 1.2 1.6 2) ///
+	ref() eform gen(pp_index_f or lb ub)
 	
 	twoway (line lb ub or pp_index_f, lp(- - l) lc(black black black) ) ///
-                if inrange(pp_index_f, 0,11)  , ///
+                if inrange(pp_index_f, 0,2)  , ///
                                 scheme(s1mono) legend(off) ///
-                                ylabel(0(.5)3, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(1(1)11) ///
+                                ylabel(0(1)2, angle(horiz) format(%2.1fc) ) ///
+                                xlabel(0(.5)2) ///
                                 ytitle("Odds ratio of hospitalization") ///
                                 xtitle("pp_index")
 	restore
 	
-	//LOWESS for each CC
-	lowess hosp pp_index if CC_1_fever==1
-	lowess death pp_index if CC_1_fever==1
-		
-	lowess hosp pp_index if CC_2_shortbr==1
-	lowess death pp_index if CC_2_shortbr==1	
-	
-	lowess hosp pp_index if CC_3_mental==1
-	lowess death pp_index if CC_3_mental==1
-	
-	lowess hosp pp_index if CC_4_chestp==1
-	lowess death pp_index if CC_4_chestp==1
-	
-	lowess hosp pp_index if CC_5_abdp==1
-	lowess death pp_index if CC_5_abdp==1
-	
+	////cvd and infection
+	gen cvd = 0
+	replace cvd = 1 if diag_1 == "I"
 
+	gen infection=0
+	replace infection = 1 if diag_3 == "A41" | diag_3 == "N10" | diag_3 == "J18" | diag_3 == "K83" | diag_3 == "G03"
+	//A41:sepsis, N10:pyelonephritis, J18:pneumonia, K83:cholangitis, G03: meningitis
+	//Angus ICD9-CM Sepsis Abstraction Criteria...ICD10 versionを検索中
+
+	//胸痛で受診した患者群でのcvdとpp_indexの関連、発熱で受診した患者群でのinfectionとpp_indexの関連
+	lowess cvd pp_index if CC_4_chestp==1
+	lowess infection pp_index if CC_1_fever==1
 	
+	//主訴別のlowess
+	twoway (lowess hosp pp_index if CC_1_fever==1) /*
+	*/ (lowess hosp pp_index if CC_2_shortbr==1) (lowess hosp pp_index if CC_3_mental==1) /*
+	*/ (lowess hosp pp_index if CC_4_chestp==1) (lowess hosp pp_index if CC_5_abdp==1) /*
+	*/ (lowess hosp pp_index if CC_6_ha==1) (lowess hosp pp_index if CC_7_nausea==1), /*
+	*/ legend(order(1 "発熱" 2 "呼吸困難" 3 "意識障害" 4 "胸痛" 5 "腹痛" 6 "頭痛" 7 "嘔気") col(4)) /*
+    */                          ylabel(0(.5)1, angle(horiz) format(%2.1fc) ) ///
+                                xlabel(0(.5)2) ///
+                                ytitle("Risk of hospitalization") ///
+                                xtitle("pp_index")
+	
+	//Cubic spline for pp_index and cvd in patients with chest pain
+	preserve
+	gen cvd = 0
+	replace cvd = 1 if diag_1 == "I"
+	keep if CC_4_chestp==1
+	mkspline pp_indexs = pp_index , nknots(6) cubic displayknots
+	mat knots = r(knots)
+	logit cvd pp_indexs*
+	
+	xbrcspline pp_indexs , matknots(knots) ///
+	values(0 0.4 0.8 1.2 1.6 2) ///
+	ref() eform gen(pp_index_f or lb ub)
+	
+	twoway (line lb ub or pp_index_f, lp(- - l) lc(black bshusolack black) ) ///
+                if inrange(pp_index_f, 0,2)  , ///
+                                scheme(s1mono) legend(off) ///
+                                ylabel(0(1)2, angle(horiz) format(%2.1fc) ) ///
+                                xlabel(0(.5)2) ///
+                                ytitle("cvd") ///
+                                xtitle("pp_index")
+	restore

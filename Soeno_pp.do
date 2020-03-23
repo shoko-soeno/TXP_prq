@@ -186,15 +186,21 @@
 
 	//sepsis
 	gen sepsis=0
-	replace sepsis = 1 if diag_3 == "A39" | diag_3 == "A40" | diag_3 == "A41" | diag_3 == "B95" | diag_3 == "B96" | diag_3 == "D69" | /*
-			*/ diag_3 == "D65" | diag_3 == "G03" | diag_3 == "G93" | diag_3 == "J18" | diag_3 == "J44" | diag_3 == "96" |/*
-			*/ diag_3 == "K72" | diag_3 == "K83" | diag_3 == "N39" | diag_3 == "N10" | diag_3 == "N17"
+	replace sepsis = 1 if icd10 == "A390" | diag_3 == "A40" | diag_3 == "A41" | icd10 == "B956" | | diag_3 == "B96" | icd10 == "B962" |  /*
+			*/ icd10 == "D695" |diag_3 == "G03" | icd10 == "G934" | icd10 == "G720" | diag_3 == "J18" | diag_3 == "J44" | diag_3 == "96" |/*
+			*/ diag_3 == "K83" | diag_3 == "N39" | diag_3 == "N10"
+	/////////////ICD-10 codes：D65のDIC、G93,1のAnoxic brain damage、K72.9のhelatic failure、N17のrenal failureは削除済
 	
+
 	//人工呼吸器
 	gen mv_nippv =0
 	replace mv_nippv =1 if mv==1 | nippv==1
 
 	//LOWESS curve
+	///referenceを0.8に設定、0.3以下は全て0.3、1.3以上は全て1.3としてfigureを作成
+	replace pp_index =0.3 if pp_index<0.3
+	replace pp_index =1.3 if pp_index>1.3
+
 	lowess hosp pp_index
 	lowess mv_nippv pp_index
 	//胸痛で受診した患者群でのcvdとpp_indexの関連、発熱で受診した患者群でのinfectionとpp_indexの関連
@@ -207,19 +213,19 @@
 	*/ (lowess hosp pp_index if CC_6_ha==1) (lowess hosp pp_index if CC_7_nausea==1), /*
 	*/ legend(order(1 "発熱" 2 "呼吸困難" 3 "意識障害" 4 "胸痛" 5 "腹痛" 6 "頭痛" 7 "嘔気") col(4)) /*
     */                          ylabel(0(.5)1, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(0(.5)2) ///
+                                xlabel(0.3(.5)1.3) ///
                                 ytitle("Risk of hospitalization") ///
                                 xtitle("pp_index")
 	
 	//Cubic spline for pp_index and hosp
 	preserve
-	mkspline pp_indexs = pp_index , nknots(6) cubic displayknots
+	mkspline pp_indexs = pp_index , nknots(5) cubic displayknots
 	mat knots = r(knots)
 	logit hosp pp_indexs*
 	
 	xbrcspline pp_indexs , matknots(knots) ///
-	values(0 0.4 0.8 1.2 1.6 2) ///
-	ref() eform gen(pp_index_f or lb ub)
+	values(0.3, 0.5, 0.8, 1.1, 1.3) ///
+	ref(0.8) eform gen(pp_index_f or lb ub)
 	
 	twoway (line lb ub or pp_index_f, lp(- - l) lc(black black black) ) ///
                 if inrange(pp_index_f, 0,2)  , ///
@@ -232,14 +238,13 @@
 
 	//Cubic spline for pp_index and mechanical ventilaion/NIPPV in all patients
 	preserve
-
-	mkspline pp_indexs = pp_index , nknots(6) cubic displayknots
+	mkspline pp_indexs = pp_index , nknots(5) cubic displayknots
 	mat knots = r(knots)
 	logit mv_nippv pp_indexs*
 	
 	xbrcspline pp_indexs , matknots(knots) ///
-	values(0 0.4 0.8 1.2 1.6 2) ///
-	ref() eform gen(pp_index_f or lb ub)
+	values(0.3, 0.5, 0.8, 1.1, 1.3) ///
+	ref(0.8) eform gen(pp_index_f or lb ub)
 	
 	twoway (line lb ub or pp_index_f, lp(- - l) lc(black bshusolack black) ) ///
                 if inrange(pp_index_f, 0,2)  , ///
@@ -258,8 +263,8 @@
 	logit cvd pp_indexs*
 	
 	xbrcspline pp_indexs , matknots(knots) ///
-	values(0 0.4 0.8 1.2 1.6 2) ///
-	ref() eform gen(pp_index_f or lb ub)
+	values(0.3, 0.5, 0.8, 1.1, 1.3) ///
+	ref(0.8) eform gen(pp_index_f or lb ub)
 	
 	twoway (line lb ub or pp_index_f, lp(- - l) lc(black bshusolack black) ) ///
                 if inrange(pp_index_f, 0,2)  , ///
@@ -278,8 +283,8 @@
 	logit sepsis pp_indexs*
 	
 	xbrcspline pp_indexs , matknots(knots) ///
-	values(0 0.4 0.8 1.2 1.6 2) ///
-	ref() eform gen(pp_index_f or lb ub)
+	values(0.3, 0.5, 0.8, 1.1, 1.3) ///
+	ref(0.8) eform gen(pp_index_f or lb ub)
 	
 	twoway (line lb ub or pp_index_f, lp(- - l) lc(black bshusolack black) ) ///
                 if inrange(pp_index_f, 0,2)  , ///

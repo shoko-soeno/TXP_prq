@@ -165,7 +165,7 @@
 		replace rr = 35 if rr > 35
 
 	//LOWESS curve for hospitalization or death
-	twoway (lowess hosp rr) (lowess mv rr) (lowess death rr), /*
+	twoway (lowess hosp rr, lpattern(solid)) (lowess mv rr, lpattern(dash)) (lowess death rr,lpattern(shortdash)), /*
 	*/ legend(order(1 "hospitalization" 2 "mechanical ventilation" 3 "death") col(3)) /*
     */                          ylabel(0(.5)1, angle(horiz) format(%2.1fc) ) ///
                                 xlabel(8(4)32) ///
@@ -175,9 +175,9 @@
 	//Lowess curve by CC
 	//RR
 	twoway (lowess hosp rr if CC_1_fever==1) /*
-	*/ (lowess hosp rr if CC_2_shortbr==1) (lowess hosp rr if CC_3_mental==1) /*
-	*/ (lowess hosp rr if CC_4_chestp==1) (lowess hosp rr if CC_5_abdp==1), /*
-	*/ legend(order(1 "Fever" 2 "Shortness of breath" 3 "Altered mental status" 4 "Chest pain" 5 "Abdominal pain") col(2)) /*
+	*/ (lowess hosp rr if CC_2_shortbr==1) (lowess hosp rr if CC_3_mental==1, lpattern(longdash)) /*
+	*/ (lowess hosp rr if CC_4_chestp==1, lpattern(dash_dot)) (lowess hosp rr if CC_5_abdp==1,lpattern(shortdash))(lowess hosp rr if CC_6_ha==1), /*
+	*/ legend(order(1 "Fever" 2 "Shortness of breath" 3 "Altered mental status" 4 "Chest pain" 5 "Abdominal pain" 6 "Headache") col(2)) /*
     */                          ylabel(0(.5)1, angle(horiz) format(%2.1fc) ) ///
                                 xlabel(8(4)32) ///
                                 ytitle("Risk of hospitalization") ///
@@ -221,32 +221,36 @@
 	replace rr_cat=2 if rr>=24
 	
 	preserve
-	keep if rr_cat==0
-	tabulate icd10 if CC_1_fever==1, sort
+	//keep if rr_cat==0
+	//tabulate icd10 if CC_1_fever==1, sort
 	//tabulate icd10 if CC_2_shortbr==1, sort
 	//tabulate icd10 if CC_3_mental==1, sort
 	//tabulate icd10 if CC_4_chestp==1, sort
 	//tabulate icd10 if CC_5_abdp==1, sort
-	//tabulate icd10 if CC_6_ha==1, sort
+	tabulate icd10 if CC_6_ha==1, sort
 	restore
 	
 	//multiple imputation後の解析
 	clear
 	import excel "/Users/shokosoeno/Downloads/Soeno_rrindex_20200317/vital_postmi.xlsx", sheet("Sheet 1") firstrow
+		
+    //RRのグラフは8未満は全て8、30（もしくは35）以上は全て30、REFIは15以下を全て15にしてFigureの範囲を変更
+	replace rr = 8 if rr < 8
+	replace rr = 35 if rr > 35
 
 	//LOWESS curve for hospitalization or death
-	twoway (lowess hosp rr) (lowess mv rr) (lowess death rr), /*
+	twoway (lowess hosp rr, lpattern(solid)) (lowess mv rr, lpattern(dash)) (lowess death rr,lpattern(shortdash)), /*
 	*/ legend(order(1 "hospitalization" 2 "mechanical ventilation" 3 "death") col(3)) /*
-    */                          ylabel(0(.5)1, angle(horiz) format(%2.1fc) ) ///
-                                xlabel(8(4)32) ///
-                                ytitle("Risk of clinical outcome") ///
+    */                          ylabel(0(.5)1, angle(horiz) format(%2.1fc) )
+                                xlabel(8(4)32)
+                                ytitle("Risk of clinical outcome")
                                 xtitle("Respiratory Rate")
 
 	//Lowess curve by CC
 	//RR
 	twoway (lowess hosp rr if CC_1_fever==1) /*
-	*/ (lowess hosp rr if CC_2_shortbr==1) (lowess hosp rr if CC_3_mental==1) /*
-	*/ (lowess hosp rr if CC_4_chestp==1) (lowess hosp rr if CC_5_abdp==1) (lowess hosp rr if CC_6_ha==1), /*
+	*/ (lowess hosp rr if CC_2_shortbr==1) (lowess hosp rr if CC_3_mental==1,lpattern(longdash)) /*
+	*/ (lowess hosp rr if CC_4_chestp==1,lpattern(dash_dot)) (lowess hosp rr if CC_5_abdp==1,lpattern(shortdash)) (lowess hosp rr if CC_6_ha==1),  /*
 	*/ legend(order(1 "Fever" 2 "Shortness of breath" 3 "Altered mental status" 4 "Chest pain" 5 "Abdominal pain" 6 "Headache") col(2)) /*
     */                          ylabel(0(.5)1, angle(horiz) format(%2.1fc) ) ///
                                 xlabel(8(4)32) ///
@@ -278,7 +282,6 @@
 
 	//Cubic spline for rr and hosp by CC
 	//value 8 of rr not observedというエラーメッセージが出るため8は削除
-
 	preserve 
 	//keep if CC_1_fever == 1
 	//keep if CC_2_shortbr==1
@@ -288,7 +291,7 @@
 	keep if CC_6_ha ==1
 	mkspline sp_hosp_rr = rr2, cubic displayknots
 	logistic hosp sp_hosp_rr*
-	xblc sp_hosp_rr*, covname(rr) at(12 16 20 24 28 32) reference(16) eform
+	xblc sp_hosp_rr*, covname(rr2) at(16 20 24 32) reference(16) eform
 	restore
 
 	//ROI = spo2/fio2/rr

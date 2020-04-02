@@ -1,15 +1,36 @@
 //Import vital sign data
 	clear
-	import delimited "/Users/shokosoeno/Downloads/tables_201804_201909/EHR_VITAL_NUMERIC.csv", encoding(utf8) clear
-	sort encounter_id vs_date vs_time
+	//2017/4〜2020/3/31までのデータ↓
+	import delimited "/Users/shokosoeno/Desktop/20200331_ERersearch_evital_n.csv", encoding(utf8) 
+	//originalをcsvのままshift_jisでimportすると、jtas（ローマ数字）で文字化けするので、いったんNumberで開いてからcvsに→utf-8でstataにimport
+	
+	//study period: April, 2018 through September, 2019
+	gen subdate = substr(vs_time,1,10)
+	gen bdate = date(subdate, "YMD")
+	format bdate %td
+	gen before = (bdate<date("2018Mar31","YMD"))
+	gen after = (bdate>date("2019Oct01","YMD"))
+	drop if before == 1 | after == 1
+	
+	keep if vs_timing == "病着時"
+	
+	gen jtas_n =.
+	replace jtas_n = 1 if jtas == "Ⅰ"
+	replace jtas_n = 2 if jtas == "Ⅱ"
+	replace jtas_n = 3 if jtas == "Ⅲ"
+	replace jtas_n = 4 if jtas == "Ⅳ"
+	replace jtas_n = 5 if jtas == "Ⅴ"
+	
+	sort encounter_id vs_time
 		bysort encounter_id: gen n_by_id=_n
 		keep if n_by_id==1
-		
+	
 	save "/Users/shokosoeno/Desktop/TXP/prq/vital.dta", replace
 
 //Import DPC data
-	import excel "/Users/shokosoeno/Desktop/TXP_vital_20200106/20191231_ERresearch_adpc_original.xlsx", sheet("Sheet1") firstrow clear
-		rename EncounterID encounter_id
+	import delimited /Users/shokosoeno/Desktop/20200331_ERresearch_adpc.csv, encoding(utf8) clear 
+	//import excel "/Users/shokosoeno/Downloads/20200331_ERresearch_adpc_original.csv", sheet("Sheet1") firstrow clear
+		rename encounterid encounter_id
 
 	save "/Users/shokosoeno/Desktop/TXP/prq/dpc.dta", replace
 
@@ -39,14 +60,41 @@
 //Import history data
 	import delimited "/Users/shokosoeno/Downloads/tables_201804_201909/EHR_MEDICAL_HISTORY_CCI.csv", encoding(utf8) varnames(1) clear
 	//caliculate cci
-	bysort encounter_id : gen cci_each = cci1_mi + cci2_chd + cci3_pvd + cci4_cvd + cci5_dementia + cci6_pulmo + cci7_rheu + cci8_ulcer + cci9_mild_liver + cci10_dm_no_comp + cci11_dm_comp*2 + cci12_plegia*2 + cci13_rd*2 + cci14_malig*2 + cci15_mod_sev_liver*3 + cci16_meta*6 + cci17_aids*6
-	keep encounter_id cci_each
-	tab cci_each
-	//bysort encounter_id : egen cci = sum(cci_each)
-	gsort + encounter_id - cci_each
-	duplicates drop encounter_id, force
-	tab cci_each
+	//bysort encounter_id : gen cci_each = cci1_mi + cci2_chd + cci3_pvd + cci4_cvd + cci5_dementia + cci6_pulmo + /*
+	// */cci7_rheu + cci8_ulcer + cci9_mild_liver + cci10_dm_no_comp + cci11_dm_comp*2 + cci12_plegia*2 + cci13_rd*2 + cci14_malig*2 + /*
+	// */cci15_mod_sev_liver*3 + cci16_meta*6 + cci17_aids*6
+	//keep encounter_id cci_each
+	//tab cci_each
+	////bysort encounter_id : egen cci = sum(cci_each)
+// 	gsort + encounter_id - cci_each
+// 	duplicates drop encounter_id, force
+// 	tab cci_each
 	//collapse (sum) cci = cci_each, by(encounter_id)
+	
+	///橋本先生からシェアしていただいたcci計算のコード
+	//同一患者が別の日に受診している場合、cciの各項目が受診の回数分増えてしまうので、その重複を考慮する必要がある。
+	collapse (sum) cci1_mi - cci17_aids, by(encounter_id)
+	replace cci1_mi=1 if cci1_mi>=1 & cci1_mi!=.
+	replace cci2_chd=1 if cci2_chd>=1 & cci2_chd!=.
+	replace cci3_pvd=1 if cci3_pvd>=1 & cci3_pvd!=.
+	replace cci4_cvd=1 if cci4_cvd>=1 & cci4_cvd!=.
+	replace cci5_dementia=1 if cci5_dementia>=1 & cci5_dementia!=.
+	replace cci6_pulmo=1 if cci6_pulmo>=1 & cci6_pulmo!=.
+	replace cci7_rheu=1 if cci7_rheu>=1 & cci7_rheu!=.
+	replace cci8_ulcer=1 if cci8_ulcer>=1 & cci8_ulcer!=.
+	replace cci9_mild_liver=1 if cci9_mild_liver>=1 & cci9_mild_liver!=.
+	replace cci10_dm_no_comp=1 if cci10_dm_no_comp>=1 & cci10_dm_no_comp!=.
+	replace cci11_dm_comp=1 if cci11_dm_comp>=1 & cci11_dm_comp!=.
+	replace cci12_plegia=1 if cci12_plegia>=1 & cci12_plegia!=.
+	replace cci13_rd=1 if cci13_rd>=1 & cci13_rd!=.
+	replace cci14_malig=1 if cci14_malig>=1 & cci14_malig!=.
+	replace cci15_mod_sev_liver=1 if cci15_mod_sev_liver>=1 & cci15_mod_sev_liver!=.
+	replace cci16_meta=1 if cci16_meta>=1 & cci16_meta!=.
+	replace cci17_aids=1 if cci17_aids>=1 & cci17_aids!=.
+	gen cci= cci1_mi + cci2_chd + cci3_pvd + cci4_cvd + cci5_dementia + /*
+	*/ cci6_pulmo + cci7_rheu + cci8_ulcer + cci9_mild_liver + cci10_dm_no_comp + /*
+	*/ cci11_dm_comp*2 + cci12_plegia*2 + cci13_rd*2 + cci14_malig*2 + cci15_mod_sev_liver*3 + cci16_meta*6 + cci17_aids*6
+		
 	save "/Users/shokosoeno/Desktop/TXP/prq/cci.dta", replace
 	
 //import procedure
@@ -95,8 +143,18 @@
 		drop if diag_3 == "I46"  //cardiac arrest 
 		drop if diag_1 == "Z"| diag_1 == "U"
 		
-		///Drop cardiac arrest (おそらくEDで死亡)
-		drop if cpa_flag==1 | pr==0 | rr==0 | spo2==0
+		//stringからnumericに
+		destring pr, replace force
+		destring rr, replace force
+		destring spo2, replace force
+		destring sbp, replace force
+		destring dbp, replace force
+		destring bt, replace force
+		destring staylength, replace force
+		
+		///Drop cardiac arrest (来院時心肺停止)
+		drop if cpa_flag==1
+		drop if pr==0 | rr==0 | spo2==0
 		
 		//replace outliers to missings
 		replace pr=. if pr<10 | pr>300
@@ -108,13 +166,13 @@
 
 		//欠測値の割合
 		//findit tabmiss
-		tabmiss rr
+		tabmiss sbp dbp pr rr spo2 bt
 		
 		//Age category
-		gen agecat=1 if age>=18 & age<40
-		replace agecat=2 if age>=40 & age<65
-		replace agecat=3 if age>=65 & age<85
-		replace agecat=4 if age>=85 & age<.
+// 		gen agecat=1 if age>=18 & age<40
+// 		replace agecat=2 if age>=40 & age<65
+// 		replace agecat=3 if age>=65 & age<85
+// 		replace agecat=4 if age>=85 & age<.
 
 		gen CC_1_fever=0
 		replace CC_1_fever=1 if standardcc1=="発熱" //発熱
@@ -126,8 +184,8 @@
 		replace CC_4_chestp=1 if standardcc1=="胸痛" //胸痛 
 		gen CC_5_abdp=0
 		replace CC_5_abdp=1 if standardcc1=="腹痛" | standardcc1=="臍下部痛" | standardcc1=="心窩部痛" | standardcc1=="右上腹部痛" | standardcc1=="右下腹部痛" 
-		gen CC_6_ha=0
-		replace CC_6_ha=1 if standardcc1=="頭痛" 
+		//gen CC_6_ha=0
+		//replace CC_6_ha=1 if standardcc1=="頭痛" 
 		//gen CC_7_nausea=0
 		//replace CC_7_nausea=1 if standardcc1=="嘔吐・嘔気"
 		
@@ -144,8 +202,10 @@
 		table1, vars(age contn \ sex cat \ sbp contn \ dbp contn \ pr contn \ /*
 	*/ rr contn \ spo2 contn \ bt contn \ jtas cat \ route cat \ cci cat \/*
 	*/ hosp cat \ mv cat \ nippv cat \ death cat \ staylength conts \ /*
-	*/ CC_1_fever cat\ CC_2_shortbr cat\CC_3_mental cat\ CC_4_chestp cat\ CC_5_abdp cat\ CC_6_ha cat) format(%9.0f) sav (/Users/shokosoeno/Desktop/TXP/prq/table1) 
+	*/ CC_1_fever cat\ CC_2_shortbr cat\CC_3_mental cat\ CC_4_chestp cat\ CC_5_abdp cat) format(%9.0f) 
+	//save (/Users/shokosoeno/Desktop/TXP/prq/table1) 
 	
+	tabstat age sbp dbp pr rr spo2 bt, stat(p25 p50 p75)
 
 	
 	save "/Users/shokosoeno/Desktop/TXP/prq/analysis.dta", replace
@@ -164,8 +224,8 @@
 		replace rr = 8 if rr < 8
 		replace rr = 35 if rr > 35
 
-	//LOWESS curve for hospitalization or death
-	twoway (lowess hosp rr, lpattern(solid)) (lowess mv rr, lpattern(dash)) (lowess death rr,lpattern(shortdash)), /*
+	//LOWESS curve for hospitalization or mv
+	twoway (lowess hosp rr, lpattern(solid)) (lowess mv rr, lpattern(dash)), /*
 	*/ legend(order(1 "hospitalization" 2 "mechanical ventilation" 3 "death") col(3)) /*
     */                          ylabel(0(.5)1, angle(horiz) format(%2.1fc) ) ///
                                 xlabel(8(4)32) ///
@@ -176,8 +236,8 @@
 	//RR
 	twoway (lowess hosp rr if CC_1_fever==1) /*
 	*/ (lowess hosp rr if CC_2_shortbr==1) (lowess hosp rr if CC_3_mental==1, lpattern(longdash)) /*
-	*/ (lowess hosp rr if CC_4_chestp==1, lpattern(dash_dot)) (lowess hosp rr if CC_5_abdp==1,lpattern(shortdash))(lowess hosp rr if CC_6_ha==1), /*
-	*/ legend(order(1 "Fever" 2 "Shortness of breath" 3 "Altered mental status" 4 "Chest pain" 5 "Abdominal pain" 6 "Headache") col(2)) /*
+	*/ (lowess hosp rr if CC_4_chestp==1, lpattern(dash_dot)) (lowess hosp rr if CC_5_abdp==1,lpattern(shortdash)), /*
+	*/ legend(order(1 "Fever" 2 "Shortness of breath" 3 "Altered mental status" 4 "Chest pain" 5 "Abdominal pain") col(2)) /*
     */                          ylabel(0(.5)1, angle(horiz) format(%2.1fc) ) ///
                                 xlabel(8(4)32) ///
                                 ytitle("Risk of hospitalization") ///
@@ -207,11 +267,10 @@
 	//keep if CC_2_shortbr==1
 	//keep if CC_3_mental == 1
 	//keep if CC_4_chestp ==1
-	//keep if CC_5_abdp ==1
-	keep if CC_6_ha ==1
+	keep if CC_5_abdp ==1
 	mkspline sp_hosp_rr = rr, cubic displayknots
 	logistic hosp sp_hosp_rr*
-	xblc sp_hosp_rr*, covname(rr) at(16 20 24 32) reference(16) eform
+	xblc sp_hosp_rr*, covname(rr) at(12 16 20 24 28 32) reference(16) eform
 	restore
 
 	//RRを16未満と、24以上で分け、主訴別のdiagnosisのtop5を出す
@@ -226,40 +285,41 @@
 	//tabulate icd10 if CC_2_shortbr==1, sort
 	//tabulate icd10 if CC_3_mental==1, sort
 	//tabulate icd10 if CC_4_chestp==1, sort
-	//tabulate icd10 if CC_5_abdp==1, sort
-	tabulate icd10 if CC_6_ha==1, sort
+	tabulate icd10 if CC_5_abdp==1, sort
 	restore
 	
-	//multiple imputation後の解析
+	//multiple imputation後の解析///////////////////////////////////////////////////////////////////////////////
 	clear
 	import excel "/Users/shokosoeno/Downloads/Soeno_rrindex_20200317/vital_postmi.xlsx", sheet("Sheet 1") firstrow
 		
     //RRのグラフは8未満は全て8、30（もしくは35）以上は全て30、REFIは15以下を全て15にしてFigureの範囲を変更
-	replace rr = 8 if rr < 8
-	replace rr = 35 if rr > 35
+	gen rr2 = round(rr) //imputed dataは小数点が含まれるため。
+	replace rr2=8 if rr<8
+	replace rr2=32 if rr>32 & rr<.
+	replace rr2=round(rr2)
 
-	//LOWESS curve for hospitalization or death
-	twoway (lowess hosp rr, lpattern(solid)) (lowess mv rr, lpattern(dash)) (lowess death rr,lpattern(shortdash)), /*
-	*/ legend(order(1 "hospitalization" 2 "mechanical ventilation" 3 "death") col(3)) /*
+	//LOWESS curve for hospitalization or mv
+	twoway (lowess hosp rr2) (lowess mv rr2), /*
+	*/ legend(order(1 "Hospitalization" 2 "Mechanical ventilation") col(3)) /*
     */                          ylabel(0(.5)1, angle(horiz) format(%2.1fc) )
                                 xlabel(8(4)32)
-                                ytitle("Risk of clinical outcome")
+                                ytitle("Risk of the clinical outcomes")
                                 xtitle("Respiratory Rate")
 
 	//Lowess curve by CC
 	//RR
-	twoway (lowess hosp rr if CC_1_fever==1) /*
-	*/ (lowess hosp rr if CC_2_shortbr==1) (lowess hosp rr if CC_3_mental==1,lpattern(longdash)) /*
-	*/ (lowess hosp rr if CC_4_chestp==1,lpattern(dash_dot)) (lowess hosp rr if CC_5_abdp==1,lpattern(shortdash)) (lowess hosp rr if CC_6_ha==1),  /*
-	*/ legend(order(1 "Fever" 2 "Shortness of breath" 3 "Altered mental status" 4 "Chest pain" 5 "Abdominal pain" 6 "Headache") col(2)) /*
+	twoway (lowess hosp rr2 if CC_1_fever==1) /*
+	*/ (lowess hosp rr2 if CC_2_shortbr==1) (lowess hosp rr2 if CC_3_mental==1) /*
+	*/ (lowess hosp rr2 if CC_4_chestp==1) (lowess hosp rr2 if CC_5_abdp==1),  /*
+	*/ legend(order(1 "Fever" 2 "Shortness of breath" 3 "Altered mental status" 4 "Chest pain" 5 "Abdominal pain") col(2)) /*
     */                          ylabel(0(.5)1, angle(horiz) format(%2.1fc) ) ///
                                 xlabel(8(4)32) ///
                                 ytitle("Risk of hospitalization") ///
-                                xtitle("Respiratory Rate")
+                                xtitle("Respiratory rate")
 
 	//Cubic spline regression
 	//install xbrcspline 
-	gen rr2 = round(rr) //imputed dataは小数点が含まれるため。
+	
 	
 	//findit xblc
 	
@@ -287,8 +347,7 @@
 	//keep if CC_2_shortbr==1
 	//keep if CC_3_mental == 1
 	//keep if CC_4_chestp ==1
-	//keep if CC_5_abdp ==1
-	keep if CC_6_ha ==1
+	keep if CC_5_abdp ==1
 	mkspline sp_hosp_rr = rr2, cubic displayknots
 	logistic hosp sp_hosp_rr*
 	xblc sp_hosp_rr*, covname(rr2) at(16 20 24 32) reference(16) eform

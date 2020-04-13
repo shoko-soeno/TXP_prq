@@ -1,25 +1,24 @@
 //Import vital sign data
 	clear
 	//2017/4〜2020/3/31までのデータ↓
-	import delimited "/Users/shokosoeno/Desktop/20200331_ERersearch_evital_n.csv", encoding(utf8) 
-	//originalをcsvのままshift_jisでimportすると、jtas（ローマ数字）で文字化けするので、いったんNumberで開いてからcvsに→utf-8でstataにimport
+	import delimited "/Users/shokosoeno/Downloads/tables_201804_201909/EHR_VITAL_NUMERIC.csv", encoding(utf8) 
 	
 	//study period: April, 2018 through September, 2019
-	gen subdate = substr(vs_time,1,10)
-	gen bdate = date(subdate, "YMD")
-	format bdate %td
-	gen before = (bdate<date("2018Mar31","YMD"))
-	gen after = (bdate>date("2019Oct01","YMD"))
-	drop if before == 1 | after == 1
+// 	gen subdate = substr(vs_time,1,10)
+// 	gen bdate = date(subdate, "YMD")
+// 	format bdate %td
+// 	gen before = (bdate<date("2018Mar31","YMD"))
+// 	gen after = (bdate>date("2019Oct01","YMD"))
+// 	drop if before == 1 | after == 1
 	
-	keep if vs_timing == "病着時"
+	//keep if vs_timing == "病着時"
 	
-	gen jtas_n =.
-	replace jtas_n = 1 if jtas == "Ⅰ"
-	replace jtas_n = 2 if jtas == "Ⅱ"
-	replace jtas_n = 3 if jtas == "Ⅲ"
-	replace jtas_n = 4 if jtas == "Ⅳ"
-	replace jtas_n = 5 if jtas == "Ⅴ"
+// 	gen jtas_n =.
+// 	replace jtas_n = 1 if jtas == "Ⅰ"
+// 	replace jtas_n = 2 if jtas == "Ⅱ"
+// 	replace jtas_n = 3 if jtas == "Ⅲ"
+// 	replace jtas_n = 4 if jtas == "Ⅳ"
+// 	replace jtas_n = 5 if jtas == "Ⅴ"
 	
 	sort encounter_id vs_time
 		bysort encounter_id: gen n_by_id=_n
@@ -59,17 +58,6 @@
 	
 //Import history data
 	import delimited "/Users/shokosoeno/Downloads/tables_201804_201909/EHR_MEDICAL_HISTORY_CCI.csv", encoding(utf8) varnames(1) clear
-	//caliculate cci
-	//bysort encounter_id : gen cci_each = cci1_mi + cci2_chd + cci3_pvd + cci4_cvd + cci5_dementia + cci6_pulmo + /*
-	// */cci7_rheu + cci8_ulcer + cci9_mild_liver + cci10_dm_no_comp + cci11_dm_comp*2 + cci12_plegia*2 + cci13_rd*2 + cci14_malig*2 + /*
-	// */cci15_mod_sev_liver*3 + cci16_meta*6 + cci17_aids*6
-	//keep encounter_id cci_each
-	//tab cci_each
-	////bysort encounter_id : egen cci = sum(cci_each)
-// 	gsort + encounter_id - cci_each
-// 	duplicates drop encounter_id, force
-// 	tab cci_each
-	//collapse (sum) cci = cci_each, by(encounter_id)
 	
 	///橋本先生からシェアしていただいたcci計算のコード
 	//同一患者が別の日に受診している場合、cciの各項目が受診の回数分増えてしまうので、その重複を考慮する必要がある。
@@ -144,12 +132,6 @@
 		drop if diag_1 == "Z"| diag_1 == "U"
 		
 		//stringからnumericに
-		destring pr, replace force
-		destring rr, replace force
-		destring spo2, replace force
-		destring sbp, replace force
-		destring dbp, replace force
-		destring bt, replace force
 		destring staylength, replace force
 		
 		///Drop cardiac arrest (来院時心肺停止)
@@ -199,19 +181,48 @@
 		gen death=0
 		replace death=1 if tenki=="死亡" | disposition=="死亡"
 
-		table1, vars(age contn \ sex cat \ sbp contn \ dbp contn \ pr contn \ /*
-	*/ rr contn \ spo2 contn \ bt contn \ jtas cat \ route cat \ cci cat \/*
-	*/ hosp cat \ mv cat \ nippv cat \ death cat \ staylength conts \ /*
-	*/ CC_1_fever cat\ CC_2_shortbr cat\CC_3_mental cat\ CC_4_chestp cat\ CC_5_abdp cat) format(%9.0f) 
+// 		table1, vars(age contn \ sex cat \ sbp contn \ dbp contn \ pr contn \ /*
+// 	*/ rr contn \ spo2 contn \ bt contn \ jtas cat \ route cat \ cci cat \/*
+// 	*/ hosp cat \ mv cat \ nippv cat \ death cat \ staylength conts \ /*
+// 	*/ CC_1_fever cat\ CC_2_shortbr cat\CC_3_mental cat\ CC_4_chestp cat\ CC_5_abdp cat) format(%9.0f) 
 	//save (/Users/shokosoeno/Desktop/TXP/prq/table1) 
 	
 	tabstat age sbp dbp pr rr spo2 bt, stat(p25 p50 p75)
-
+	tab jtas
+	tab route
+	tab cci
+    tab mv 
+    tab nippv 
+	tab death 
+	tabstat staylength, stat(p25 p50 p75)
+	tab CC_1_fever
+	tab CC_2_shortbr
+	tab CC_3_mental
+	tab CC_4_chestp
+	tab CC_5_abdp
 	
 	save "/Users/shokosoeno/Desktop/TXP/prq/analysis.dta", replace
 	
-///Data analysis
+///Data analysis(case complete)
 	use "/Users/shokosoeno/Desktop/TXP/prq/analysis.dta", clear
+
+	gen missed =0
+	replace missed =1 if rr ==.
+	
+	tabstat age sbp dbp pr rr spo2 bt, stat(p25 p50 p75) by (missed)
+	tab jtas missed
+	tab route
+	tab cci
+    tab mv
+    tab nippv
+	tab death
+destring staylength, replace force
+	tabstat staylength, stat(p25 p50 p75)
+	tab CC_1_fever missed, col
+	tab CC_2_shortbr missed, col
+	tab CC_3_mental missed, col
+	tab CC_4_chestp missed, col
+	tab CC_5_abdp missed, col
 	
 	//case completeにするため欠測をdrop
 	drop if rr==.
@@ -225,24 +236,33 @@
 		replace rr = 35 if rr > 35
 
 	//LOWESS curve for hospitalization or mv
-	twoway (lowess hosp rr, lpattern(solid)) (lowess mv rr, lpattern(dash)), /*
-	*/ legend(order(1 "hospitalization" 2 "mechanical ventilation" 3 "death") col(3)) /*
+	twoway (lowess hosp rr, lpattern(solid)) (lowess mv rr), /*
+	*/ legend(order(1 "hospitalization" 2 "mechanical ventilation") col(2)) /*
     */                          ylabel(0(.5)1, angle(horiz) format(%2.1fc) ) ///
                                 xlabel(8(4)32) ///
-                                ytitle("Risk of clinical outcome") ///
+                                ytitle("Risk of the clinical outcomes") ///
                                 xtitle("Respiratory Rate")
 
 	//Lowess curve by CC
-	//RR
+	//RR and hosp
 	twoway (lowess hosp rr if CC_1_fever==1) /*
-	*/ (lowess hosp rr if CC_2_shortbr==1) (lowess hosp rr if CC_3_mental==1, lpattern(longdash)) /*
-	*/ (lowess hosp rr if CC_4_chestp==1, lpattern(dash_dot)) (lowess hosp rr if CC_5_abdp==1,lpattern(shortdash)), /*
+	*/ (lowess hosp rr if CC_2_shortbr==1) (lowess hosp rr if CC_3_mental==1) /*
+	*/ (lowess hosp rr if CC_4_chestp==1) (lowess hosp rr if CC_5_abdp==1), /*
 	*/ legend(order(1 "Fever" 2 "Shortness of breath" 3 "Altered mental status" 4 "Chest pain" 5 "Abdominal pain") col(2)) /*
     */                          ylabel(0(.5)1, angle(horiz) format(%2.1fc) ) ///
                                 xlabel(8(4)32) ///
                                 ytitle("Risk of hospitalization") ///
                                 xtitle("Respiratory Rate")
-
+ 
+	//RR and mv
+	twoway (lowess mv rr if CC_1_fever==1) /*
+	*/ (lowess mv rr if CC_2_shortbr==1) (lowess mv rr if CC_3_mental==1) /*
+	*/ (lowess mv rr if CC_4_chestp==1) (lowess mv rr if CC_5_abdp==1), /*
+	*/ legend(order(1 "Fever" 2 "Shortness of breath" 3 "Altered mental status" 4 "Chest pain" 5 "Abdominal pain") col(2)) /*
+    */                          ylabel(0(.5)1, angle(horiz) format(%2.1fc) ) ///
+                                xlabel(8(4)32) ///
+                                ytitle("Risk of mechanical ventilation") ///
+                                xtitle("Respiratory Rate")
 	//Cubic spline regression
 	//install xbrcspline 
 	
@@ -256,9 +276,9 @@
 
 	//mv＋NIPPVとRR（nippvは0なので実質mvのみ）
 	preserve
-	mkspline sp_mn_rr = mv, cubic displayknots
-	logistic mv sp_mn_rr*
-	xblc sp_mv_rr*, covname(rr) at(12 16 20 24 28 32) reference(16) eform
+	mkspline sp_mv_rr = mv, cubic displayknots
+	logistic mv sp_mv_rr*
+	xblc sp_mv_rr*, covname(rr) at(16 20 24 28 32) reference(16) eform
 	restore
 
 	//Cubic spline for rr and hosp by CC
@@ -288,15 +308,42 @@
 	tabulate icd10 if CC_5_abdp==1, sort
 	restore
 	
+
+
 	//multiple imputation後の解析///////////////////////////////////////////////////////////////////////////////
 	clear
-	import excel "/Users/shokosoeno/Downloads/Soeno_rrindex_20200317/vital_postmi.xlsx", sheet("Sheet 1") firstrow
+	//import excel "/Users/shokosoeno/Downloads/Soeno_rrindex_20200317/vital_postmi.xlsx", sheet("Sheet 1") firstrow
+	import excel "/Users/shokosoeno/Downloads/vital_postmi.xlsx", sheet("Sheet 1") firstrow
+
+	//Disposition
+		gen hosp=0 
+		replace hosp=1 if disposition=="入院" | disposition=="ICU" | disposition=="直接入院" 
+
+		gen death=0
+		replace death=1 if tenki=="死亡" | disposition=="死亡"
+
+	gen CC_1_fever=0
+		replace CC_1_fever=1 if standardcc1=="発熱" //発熱
+		gen CC_2_shortbr=0
+		replace CC_2_shortbr=1 if standardcc1=="呼吸困難" //呼吸困難
+		gen CC_3_mental=0
+		replace CC_3_mental=1 if standardcc1=="意識障害" //意識障害
+		gen CC_4_chestp=0
+		replace CC_4_chestp=1 if standardcc1=="胸痛" //胸痛 
+		gen CC_5_abdp=0
+		replace CC_5_abdp=1 if standardcc1=="腹痛" | standardcc1=="臍下部痛" | standardcc1=="心窩部痛" | standardcc1=="右上腹部痛" | standardcc1=="右下腹部痛" 
 		
     //RRのグラフは8未満は全て8、30（もしくは35）以上は全て30、REFIは15以下を全て15にしてFigureの範囲を変更
 	gen rr2 = round(rr) //imputed dataは小数点が含まれるため。
 	replace rr2=8 if rr<8
 	replace rr2=32 if rr>32 & rr<.
 	replace rr2=round(rr2)
+
+	table1, vars(age contn \ sex cat \ sbp contn \ dbp contn \ pr contn \ /*
+	*/ rr contn \ spo2 contn \ bt contn \ jtas cat \ route cat \ cci cat \/*
+	*/ hosp cat \ mv cat \ nippv cat \ /*
+	*/ CC_1_fever cat\ CC_2_shortbr cat\CC_3_mental cat\ CC_4_chestp cat\ CC_5_abdp cat) format(%9.0f)
+	
 
 	//LOWESS curve for hospitalization or mv
 	twoway (lowess hosp rr2) (lowess mv rr2), /*
@@ -319,8 +366,6 @@
 
 	//Cubic spline regression
 	//install xbrcspline 
-	
-	
 	//findit xblc
 	
 	//hospとRR
@@ -350,7 +395,7 @@
 	keep if CC_5_abdp ==1
 	mkspline sp_hosp_rr = rr2, cubic displayknots
 	logistic hosp sp_hosp_rr*
-	xblc sp_hosp_rr*, covname(rr2) at(16 20 24 32) reference(16) eform
+	xblc sp_hosp_rr*, covname(rr2) at(12 16 20 24 32) reference(16) eform
 	restore
 
 	//ROI = spo2/fio2/rr

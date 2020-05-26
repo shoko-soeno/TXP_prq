@@ -4,22 +4,22 @@
 	import excel "/Users/shokosoeno/Downloads/vital_postmi.xlsx", sheet("Sheet 1") firstrow
 
 		//Drop children and missing age
-// 		drop if age==.
-// 		drop if age<18
+		drop if age==.
+		drop if age<18
 
 		//drop if the primary diagoniss is I46 or S00-U99 (non-medical reasons)
-// 		gen diag_1 = substr(icd10,1,1)
+		gen diag_1 = substr(icd10,1,1)
 		gen diag_3 = substr(icd10,1,3)
-// 		drop if diag_1 == "S" |  diag_1 == "T"| diag_1 == "V"| diag_1 == "W"| diag_1 == "X"| diag_1 == "Y"
+		drop if diag_1 == "S" |  diag_1 == "T"| diag_1 == "V"| diag_1 == "W"| diag_1 == "X"| diag_1 == "Y"
 		drop if diag_3 == "I46"  //cardiac arrest 
-// 		drop if diag_1 == "Z"| diag_1 == "U"	
+		drop if diag_1 == "Z"| diag_1 == "U"	
 		
 		///Drop cardiac arrest (来院時心肺停止)
 		drop if cpa_flag==1
 		drop if pr==0 | rr==0 | spo2==0
 		
 		//replace outliers to missings
-		replace rr=. if rr_mi<3 | rr_mi>60
+		replace rr=. if rr<3 | rr>60
 
 	//Disposition
 		gen hosp=0 
@@ -35,19 +35,23 @@
 		replace CC_4_chestp=1 if standardcc1=="胸痛" //胸痛 
 		gen CC_5_abdp=0
 		replace CC_5_abdp=1 if standardcc1=="腹痛" | standardcc1=="臍下部痛" | standardcc1=="心窩部痛" | standardcc1=="右上腹部痛" | standardcc1=="右下腹部痛" 
-				
-	// outliers to missing
-        replace rr=. if rr_mi<3 | rr_mi>60
 
     // 補完後RRの小数点以下を四捨五入
 	gen rr3=round(rr_mi)	
 
 	//full dataで、RRを16未満と、24以上で分け、主訴別のdiagnosisのtop5を出す
 	//診断名ですが、case-completeではなくfull dataで見たときにRR<16での各主訴での入院top3ぐらいまで出せますか？
-	gen rr_cat=.
-	replace rr_cat=0 if rr<16
-	replace rr_cat=1 if rr>=16 & rr<24
-	replace rr_cat=2 if rr>=24
+	gen rr_str=.
+	replace rr_str=0 if rr<8
+	replace rr_str=1 if rr>=8 & rr<12
+	replace rr_str=2 if rr>=12 & rr<16
+	replace rr_str=3 if rr>=16 & rr<20
+	replace rr_str=4 if rr>=20 & rr<24
+	replace rr_str=5 if rr>=24 & rr<28
+	replace rr_str=6 if rr>=28 & rr<32
+	replace rr_str=7 if rr>=32
+	replace rr_str=8 if rr==.
+	
 	preserve
 	keep if hosp == 1
 	keep if rr_cat==2
@@ -120,12 +124,14 @@
 	//RRcat=RR<12, 12-15, 16-20 (ref), 21-24, 25-28, 29-31, ≥31もしくはRRcat2=<12, 13-20, 21-28, ≥28でカテゴリわけして
 	//ロジスティック回してください（logistic hosp i.RRcat, or）
 	//RRはcut関数などを使用してカテゴリ分けし、referenceを16にする場合、logistic hosp i.RRcat, base(16) or 
-	gen rrcat=0 if rr>=16 & rr<=20
-	replace rrcat=1 if rr<=12
+	gen rrcat=0 if rr>=16 & rr<20
+	replace rrcat=1 if rr<12
 	replace rrcat=2 if rr>=12 & rr<16
 	replace rrcat=3 if rr>=20 & rr<24
 	replace rrcat=4 if rr>=24 & rr<28
-	replace rrcat=5 if rr>=28 & rr<32
+	replace rrcat=5 if rr>=28
 	replace rrcat=6 if rr==.
 	logistic hosp i.rrcat, or
+	
+
 

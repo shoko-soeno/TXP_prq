@@ -39,9 +39,9 @@
 	gen CC_5_disconfort =0
 	replace CC_5_disconfort =1 if standardcc1=="胸部不快感" //胸部不快感(cc90)
 	gen CC_6_backpain =0
-	replace CC_6_backpain =1 if standardcc1=="背部痛" //胸部不快感(cc88)
+	replace CC_6_backpain =1 if standardcc1=="背部痛" //背部痛(cc88)
 	gen CC_7_nausea =0
-	replace CC_7_nausea =1 if standardcc1=="嘔吐・嘔気" //胸部不快感(cc44)
+	replace CC_7_nausea =1 if standardcc1=="嘔吐・嘔気" //嘔気嘔吐(cc44)
 
     // 補完後RRの小数点以下を四捨五入
 	gen rr3=round(rr_mi)	

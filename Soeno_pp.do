@@ -8,10 +8,11 @@
 	save "/Users/shokosoeno/Downloads/TXP_pp/vital.dta", replace
 
 //Import DPC data
-	//import excel "/Users/shokosoeno/Desktop/TXP_vital_20200106/20191231_ERresearch_adpc_original.xlsx", sheet("Sheet1") firstrow clear
-		//rename EncounterID encounter_id
+	import delimited /Users/shokosoeno/Desktop/20200331_ERresearch_adpc.csv, encoding(utf8) clear 
+	//import excel "/Users/shokosoeno/Downloads/20200331_ERresearch_adpc_original.csv", sheet("Sheet1") firstrow clear
+		rename encounterid encounter_id
 
-	//save "/Users/shokosoeno/Downloads/TXP_pp/dpc.dta", replace
+	save "/Users/shokosoeno/Desktop/TXP/prq/dpc.dta", replace
 
 //Import complaint
 	import delimited "/Users/shokosoeno/Downloads/tables_201804_201909/EHR_COMPLAINT.csv",  encoding(utf8) varnames(1) clear
@@ -37,17 +38,44 @@
 	save "/Users/shokosoeno/Downloads/TXP_pp/enc.dta", replace
 	
 //Import history data
-	//import delimited "/Users/shokosoeno/Downloads/tables_201804_201909/EHR_MEDICAL_HISTORY_CCI.csv", encoding(utf8) varnames(1) clear
+	import delimited "/Users/shokosoeno/Downloads/tables_201804_201909/EHR_MEDICAL_HISTORY_CCI.csv", encoding(utf8) varnames(1) clear
 	//caliculate cci
-	//bysort encounter_id : gen cci_each = cci1_mi + cci2_chd + cci3_pvd + cci4_cvd + cci5_dementia + cci6_pulmo + cci7_rheu + cci8_ulcer + cci9_mild_liver + cci10_dm_no_comp + cci11_dm_comp*2 + cci12_plegia*2 + cci13_rd*2 + cci14_malig*2 + cci15_mod_sev_liver*3 + cci16_meta*6 + cci17_aids*6
+	//bysort encounter_id : gen cci_each = cci1_mi + cci2_chd + cci3_pvd + cci4_cvd + cci5_dementia + cci6_pulmo + /*
+	// */cci7_rheu + cci8_ulcer + cci9_mild_liver + cci10_dm_no_comp + cci11_dm_comp*2 + cci12_plegia*2 + cci13_rd*2 + cci14_malig*2 + /*
+	// */cci15_mod_sev_liver*3 + cci16_meta*6 + cci17_aids*6
 	//keep encounter_id cci_each
 	//tab cci_each
-	//bysort encounter_id : egen cci = sum(cci_each)
-	//gsort + encounter_id - cci_each
-	//duplicates drop encounter_id, force
-	//tab cci_each
+	////bysort encounter_id : egen cci = sum(cci_each)
+// 	gsort + encounter_id - cci_each
+// 	duplicates drop encounter_id, force
+// 	tab cci_each
 	//collapse (sum) cci = cci_each, by(encounter_id)
-	//save "/Users/shokosoeno/Downloads/TXP_pp/cci.dta", replace
+	
+	///橋本先生からシェアしていただいたcci計算のコード
+	//同一患者が別の日に受診している場合、cciの各項目が受診の回数分増えてしまうので、その重複を考慮する必要がある。
+	collapse (sum) cci1_mi - cci17_aids, by(encounter_id)
+	replace cci1_mi=1 if cci1_mi>=1 & cci1_mi!=.
+	replace cci2_chd=1 if cci2_chd>=1 & cci2_chd!=.
+	replace cci3_pvd=1 if cci3_pvd>=1 & cci3_pvd!=.
+	replace cci4_cvd=1 if cci4_cvd>=1 & cci4_cvd!=.
+	replace cci5_dementia=1 if cci5_dementia>=1 & cci5_dementia!=.
+	replace cci6_pulmo=1 if cci6_pulmo>=1 & cci6_pulmo!=.
+	replace cci7_rheu=1 if cci7_rheu>=1 & cci7_rheu!=.
+	replace cci8_ulcer=1 if cci8_ulcer>=1 & cci8_ulcer!=.
+	replace cci9_mild_liver=1 if cci9_mild_liver>=1 & cci9_mild_liver!=.
+	replace cci10_dm_no_comp=1 if cci10_dm_no_comp>=1 & cci10_dm_no_comp!=.
+	replace cci11_dm_comp=1 if cci11_dm_comp>=1 & cci11_dm_comp!=.
+	replace cci12_plegia=1 if cci12_plegia>=1 & cci12_plegia!=.
+	replace cci13_rd=1 if cci13_rd>=1 & cci13_rd!=.
+	replace cci14_malig=1 if cci14_malig>=1 & cci14_malig!=.
+	replace cci15_mod_sev_liver=1 if cci15_mod_sev_liver>=1 & cci15_mod_sev_liver!=.
+	replace cci16_meta=1 if cci16_meta>=1 & cci16_meta!=.
+	replace cci17_aids=1 if cci17_aids>=1 & cci17_aids!=.
+	gen cci= cci1_mi + cci2_chd + cci3_pvd + cci4_cvd + cci5_dementia + /*
+	*/ cci6_pulmo + cci7_rheu + cci8_ulcer + cci9_mild_liver + cci10_dm_no_comp + /*
+	*/ cci11_dm_comp*2 + cci12_plegia*2 + cci13_rd*2 + cci14_malig*2 + cci15_mod_sev_liver*3 + cci16_meta*6 + cci17_aids*6
+		
+	save "/Users/shokosoeno/Desktop/TXP/prq/cci.dta", replace
 
 //Import procedure data	
 	import delimited "/Users/shokosoeno/Downloads/tables_201804_201909/CLAIM_PROCEDURE.csv", encoding(UTF-8)clear

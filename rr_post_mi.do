@@ -52,9 +52,19 @@
 	replace rr_str=7 if rr>=32
 	replace rr_str=8 if rr==.
 	
+	gen rr_str_mi=.
+	replace rr_str_mi=0 if rr_mi<8
+	replace rr_str_mi=1 if rr_mi>=8 & rr_mi<12
+	replace rr_str_mi=2 if rr_mi>=12 & rr_mi<16
+	replace rr_str_mi=3 if rr_mi>=16 & rr_mi<20
+	replace rr_str_mi=4 if rr_mi>=20 & rr_mi<24
+	replace rr_str_mi=5 if rr_mi>=24 & rr_mi<28
+	replace rr_str_mi=6 if rr_mi>=28 & rr_mi<32
+	replace rr_str_mi=7 if rr_mi>=32
+	
 	preserve
 	keep if hosp == 1
-	keep if rr_cat==2
+	//keep if rr_cat==2
 	tabulate icd10 if CC_1_fever==1, sort
 	//tabulate icd10 if CC_2_shortbr==1, sort
 	//tabulate icd10 if CC_3_mental==1, sort
@@ -132,6 +142,29 @@
 	replace rrcat=5 if rr>=28
 	replace rrcat=6 if rr==.
 	logistic hosp i.rrcat, or
+	logistic mn i.rrcat, or
+
+	//Logistic regressionでmechanical ventilation use のORは計算できないんでしたっけ？
+	//もしできるなら<12のORを、計算できないならventilatinoはomitで良いです。
+
+	//new early warning score
+	gen rr_news =0 if rr>=12 & rr<21
+	replace rr_news=1 if rr<=8
+	replace rr_news=2 if rr>8 & rr<12
+	replace rr_news=3 if rr>=21 & rr<25
+	replace rr_news=4 if rr>=25
+	replace rr_news=5 if rr==.
+	logistic hosp i.rr_news, or
 	
-
-
+	
+	//apache 2 score
+	gen rr_ap =0 if rr>=12 & rr<24
+	replace rr_ap=1 if rr<=5
+	replace rr_ap=2 if rr>6 & rr<10
+	replace rr_ap=3 if rr>=10 & rr<12
+	replace rr_ap=4 if rr>=25 & rr<35
+	replace rr_ap=5 if rr>=35 & rr<50
+	replace rr_ap=6 if rr>=50
+	replace rr_ap=7 if rr==.
+	logistic hosp i.rr_ap, or
+	//logistic mn i.rr_ap, or
